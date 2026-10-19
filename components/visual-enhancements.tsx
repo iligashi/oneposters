@@ -7,8 +7,20 @@ import { springs } from '@/lib/motion'
 
 export function ThemeToggle() {
   const [dark, setDark] = useState(false)
-  useEffect(() => setDark(document.documentElement.dataset.theme === 'dark'), [])
-  function toggle() { const next = !dark; setDark(next); document.documentElement.dataset.theme = next ? 'dark' : 'light'; localStorage.setItem('oneposters-theme', next ? 'dark' : 'light') }
+  const applyTheme = (isDark: boolean) => {
+    const root = document.documentElement
+    root.dataset.theme = isDark ? 'dark' : 'light'
+    const vars = isDark ? { cream: '#0B0B0B', ink: '#F5EFE6', blue: '#0A14FF', muted: '#B6B0A7', line: '#343434' } : { cream: '#F5EFE6', ink: '#0B0B0B', blue: '#0A14FF', muted: '#716D67', line: '#D8D1C7' }
+    Object.entries(vars).forEach(([name, value]) => root.style.setProperty(`--${name}`, value))
+  }
+  useEffect(() => {
+    const saved = localStorage.getItem('oneposters-theme')
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+    const isDark = saved ? saved === 'dark' : prefersDark
+    applyTheme(isDark)
+    setDark(isDark)
+  }, [])
+  function toggle() { const next = !dark; setDark(next); applyTheme(next); localStorage.setItem('oneposters-theme', next ? 'dark' : 'light') }
   return <button className="theme-toggle" onClick={toggle} aria-label={dark ? 'Switch to light theme' : 'Switch to dark theme'}>{dark ? <Sun /> : <Moon />}</button>
 }
 
