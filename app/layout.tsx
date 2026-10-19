@@ -3,8 +3,8 @@ import type { Metadata, Viewport } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'SWORDS — Brands that cut through',
-  description: 'Swords is an independent social media and branding agency building sharp, culture-led identities.',
+  title: 'oneposters — Make your space speak',
+  description: 'Poster-sized ideas for walls with something to say. Curated, printed and shipped from our studio.',
   generator: 'v0.app',
   icons: {
     icon: [
