@@ -22,6 +22,7 @@ export default function Home() {
   const [liked, setLiked] = useState<number[]>([])
   const [activeCategory, setActiveCategory] = useState('All')
   const [searchOpen, setSearchOpen] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
   const [email, setEmail] = useState('')
   const [subscribed, setSubscribed] = useState(false)
   const filtered = useMemo(() => activeCategory === 'All' ? posters : posters.filter((poster) => poster.category === activeCategory), [activeCategory])
@@ -30,12 +31,13 @@ export default function Home() {
     <main className="storefront"><VisualEnhancements />
       <div className="store-topbar"><span>Free shipping on orders over €75</span><span>Designed to make a room feel like yours</span><span>EN / EUR</span></div>
       <header className="store-header">
-        <button className="icon-button mobile-only" aria-label="Open menu"><Menu /></button>
+        <button className="icon-button mobile-only" aria-label={menuOpen ? 'Close menu' : 'Open menu'} aria-expanded={menuOpen} onClick={() => setMenuOpen((open) => !open)}><Menu /></button>
         <a className="store-logo" href="#top"><span>one</span><small>posters</small></a>
         <nav><a href="/shop">Shop</a><a href="/shop">Collections</a><a href="/studio">Create your own</a><a href="/about">Our story</a></nav>
         <div className="header-actions"><button className="icon-button" aria-label="Search" onClick={() => setSearchOpen(true)}><Search /></button><ThemeToggle /><CartButton /></div>
       </header>
       <CartDrawer />
+      {menuOpen && <><button className="mobile-menu-backdrop" aria-label="Close menu" onClick={() => setMenuOpen(false)} /><aside className="mobile-menu" aria-label="Mobile navigation"><div className="mobile-menu-head"><span>Navigate</span><button className="icon-button" aria-label="Close menu" onClick={() => setMenuOpen(false)}>×</button></div><nav><a href="/shop" onClick={() => setMenuOpen(false)}>Shop <ArrowRight /></a><a href="/shop" onClick={() => setMenuOpen(false)}>Collections <ArrowRight /></a><a href="/studio" onClick={() => setMenuOpen(false)}>Create your own <ArrowRight /></a><a href="/about" onClick={() => setMenuOpen(false)}>Our story <ArrowRight /></a><a href="/wishlist" onClick={() => setMenuOpen(false)}>Wishlist <ArrowRight /></a></nav><small>oneposters / 2026</small></aside></>}
       {searchOpen && <div className="search-overlay"><button className="icon-button close-search" onClick={() => setSearchOpen(false)} aria-label="Close search">×</button><p className="kicker">Search the collection</p><input autoFocus placeholder="Try ‘blue’, ‘abstract’ or ‘Tokyo’" onChange={() => {}} /><p className="search-hint">Press escape to close</p></div>}
 
       <section id="top" className="store-hero"><div className="hero-sticker">NEW<br />DROP<br /><span>→ 01</span></div><div className="hero-copy-store"><p className="kicker">Art for the everyday</p><h1>Make your<br /><i>space</i> speak.</h1><p>Poster-sized ideas for walls with something to say. Curated, printed and shipped from our studio.</p><div className="hero-actions"><a className="blue-button" href="#shop">Shop the collection <ArrowRight /></a><a className="text-link" href="#studio">Make your own <MoveRight /></a></div></div><div className="hero-poster hero-poster-back"><img src={posters[2].image} alt="Japanese-inspired poster" /></div><div className="hero-poster hero-poster-front"><img src={posters[0].image} alt="Abstract blue poster" /><div className="poster-label">oneposters / 001</div></div><div className="hero-scroll">SCROLL TO EXPLORE <span>↓</span></div></section>
