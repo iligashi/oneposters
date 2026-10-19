@@ -5,24 +5,10 @@ import './globals.css'
 export const metadata: Metadata = {
   title: 'oneposters — Make your space speak',
   description: 'Poster-sized ideas for walls with something to say. Curated, printed and shipped from our studio.',
+  metadataBase: new URL('https://oneposters.studio'),
   generator: 'v0.app',
-  icons: {
-    icon: [
-      {
-        url: '/icon-light-32x32.png',
-        media: '(prefers-color-scheme: light)',
-      },
-      {
-        url: '/icon-dark-32x32.png',
-        media: '(prefers-color-scheme: dark)',
-      },
-      {
-        url: '/icon.svg',
-        type: 'image/svg+xml',
-      },
-    ],
-    apple: '/apple-icon.png',
-  },
+  openGraph: { title: 'oneposters — Make your space speak', description: 'Poster-sized ideas for walls with something to say.', images: ['/og-image.svg'] },
+  icons: { icon: '/icon.svg', apple: '/apple-icon.png' },
 }
 
 export const viewport: Viewport = {
