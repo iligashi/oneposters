@@ -1,3 +1,4 @@
+import { put } from '@vercel/blob'
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 
@@ -14,10 +15,16 @@ export async function POST(request: Request) {
   if (!ALLOWED.has(file.type)) return NextResponse.json({ error: 'Use JPG, PNG, WebP, or AVIF.' }, { status: 400 })
   if (file.size > MAX_BYTES) return NextResponse.json({ error: 'Image must be smaller than 10MB.' }, { status: 400 })
 
-  const safeName = file.name.toLowerCase().replace(/[^a-z0-9.]+/g, '-').replace(/(^-|-$)/g, '') || 'image'
-  const path = `${user.id}/${crypto.randomUUID()}-${safeName}`
-  const { error } = await supabase.storage.from('studio-media').upload(path, file, { contentType: file.type, upsert: false })
-  if (error) return NextResponse.json({ error: 'Could not store the image.' }, { status: 400 })
-  const { data } = supabase.storage.from('studio-media').getPublicUrl(path)
-  return NextResponse.json({ url: data.publicUrl })
+  try {
+    const safeName = file.name.toLowerCase().replace(/[^a-z0-9.]+/g, '-').replace(/(^-|-$)/g, '') || 'image'
+    const blob = await put(`studio/${user.id}/${crypto.randomUUID()}-${safeName}`, file, {
+      access: 'public',
+      addRandomSuffix: false,
+      contentType: file.type,
+    })
+    return NextResponse.json({ url: blob.url, pathname: blob.pathname })
+  } catch (error) {
+    console.error('[v0] Blob upload failed:', error)
+    return NextResponse.json({ error: 'Could not store the image.' }, { status: 500 })
+  }
 }
