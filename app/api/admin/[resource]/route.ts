@@ -1,8 +1,13 @@
 import { NextResponse } from 'next/server'
+import { revalidatePath, revalidateTag } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 
 const resources = {
   products: ['id', 'title', 'slug', 'description', 'category_id', 'tags', 'status', 'publish_at', 'seo_title', 'seo_description', 'og_image_url'],
+  product_sizes: ['id', 'product_id', 'label', 'width_cm', 'height_cm', 'price_cents'],
+  product_images: ['id', 'product_id', 'url', 'alt', 'sort_order'],
+  frame_options: ['id', 'name', 'color', 'price_cents', 'active'],
+  paper_options: ['id', 'name', 'price_cents', 'active'],
   categories: ['id', 'name', 'slug', 'sort_order'],
   orders: ['id', 'order_number', 'customer_id', 'status', 'payment_status', 'tracking_number', 'notes'],
   customers: ['id', 'email', 'name', 'phone', 'notes', 'tags'],
@@ -12,7 +17,7 @@ const resources = {
   social_posts: ['id', 'caption', 'image_url', 'scheduled_at', 'status', 'product_id'],
   site_content: ['key', 'value'],
 } as const
-const tables = { designs: 'studio_designs' as const, products: 'products' as const, categories: 'categories' as const, orders: 'orders' as const, customers: 'customers' as const, discounts: 'discounts' as const, posts: 'posts' as const, social_posts: 'social_posts' as const, site_content: 'site_content' as const }
+const tables = { designs: 'studio_designs' as const, products: 'products' as const, product_sizes: 'product_sizes' as const, product_images: 'product_images' as const, frame_options: 'frame_options' as const, paper_options: 'paper_options' as const, categories: 'categories' as const, orders: 'orders' as const, customers: 'customers' as const, discounts: 'discounts' as const, posts: 'posts' as const, social_posts: 'social_posts' as const, site_content: 'site_content' as const }
 
 async function staff() {
   const supabase = await createClient()
@@ -20,7 +25,11 @@ async function staff() {
   if (!user) return { supabase, response: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) }
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
   if (!profile || !['owner', 'manager', 'support'].includes(profile.role)) return { supabase, response: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) }
-  return { supabase }
+  return { supabase, user }
+}
+
+async function audit(supabase: any, actorId: string, action: string, resource: string, entityId: string | null, after: unknown) {
+  await supabase.from('audit_log').insert({ actor_id: actorId, action, entity_type: resource, entity_id: entityId, after })
 }
 
 export async function GET(request: Request, { params }: { params: Promise<{ resource: string }> }) {
@@ -42,6 +51,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ res
   const body = await request.json(); const payload = Object.fromEntries(Object.entries(body).filter(([key]) => keys.includes(key as never)))
   const { data, error } = await auth.supabase.from(tables[resource as keyof typeof tables]).insert(payload).select().single()
   if (error) return NextResponse.json({ error: 'Could not create resource' }, { status: 400 })
+  await audit(auth.supabase, auth.user.id, 'create', resource, data?.id ?? null, data)
+  revalidatePath('/'); revalidatePath('/shop'); if (resource === 'products') revalidateTag('catalog', 'max')
   return NextResponse.json({ data }, { status: 201 })
 }
 
@@ -53,6 +64,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ re
   const payload = Object.fromEntries(Object.entries(body).filter(([key]) => key !== 'id' && keys.includes(key as never)))
   const { data, error } = await auth.supabase.from(tables[resource as keyof typeof tables]).update(payload).eq('id', id).select().single()
   if (error) return NextResponse.json({ error: 'Could not update resource' }, { status: 400 })
+  await audit(auth.supabase, auth.user.id, 'update', resource, id, data)
+  revalidatePath('/'); revalidatePath('/shop'); if (resource === 'products') revalidateTag('catalog', 'max')
   return NextResponse.json({ data })
 }
 
@@ -63,5 +76,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ r
   const id = new URL(request.url).searchParams.get('id'); if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 })
   const { error } = await auth.supabase.from(tables[resource as keyof typeof tables]).delete().eq('id', id)
   if (error) return NextResponse.json({ error: 'Could not delete resource' }, { status: 400 })
+  await audit(auth.supabase, auth.user.id, 'delete', resource, id, null)
+  revalidatePath('/'); revalidatePath('/shop'); if (resource === 'products') revalidateTag('catalog', 'max')
   return NextResponse.json({ ok: true })
 }
