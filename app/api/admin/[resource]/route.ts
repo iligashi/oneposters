@@ -28,7 +28,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ reso
   if (!(resource in tables)) return NextResponse.json({ error: 'Unknown resource' }, { status: 404 })
   const auth = await staff(); if (auth.response) return auth.response
   const url = new URL(request.url); const limit = Math.min(Number(url.searchParams.get('limit') || 100), 200)
-  const { data, error } = await auth.supabase.from(tables[resource as keyof typeof tables]).select('*').order('created_at', { ascending: false }).limit(limit)
+  let query = auth.supabase.from(tables[resource as keyof typeof tables]).select('*').limit(limit)
+  if (resource !== 'categories' && resource !== 'site_content') query = query.order('created_at', { ascending: false })
+  const { data, error } = await query
   if (error) return NextResponse.json({ error: 'Could not load resource' }, { status: 500 })
   return NextResponse.json({ data })
 }
