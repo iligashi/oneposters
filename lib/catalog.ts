@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/client'
+import { getProduct } from '@/data/products'
 
 export type CatalogProduct = {
   id: string
@@ -17,7 +18,7 @@ export async function fetchPublishedProduct(slug: string) {
   const { data, error } = await supabase.from('products').select('id, slug, title, description, category_id, product_images(id,url,alt,sort_order), product_sizes(id,label,width_cm,height_cm,price_cents), categories(name)').eq('slug', slug).eq('status', 'published').maybeSingle()
   if (error) throw error
   if (!data) return null
-  return { ...data, image: data.product_images?.sort((a: any, b: any) => a.sort_order - b.sort_order)[0]?.url, category: data.categories?.name ?? 'Art', price: (data.product_sizes?.[0]?.price_cents ?? 3200) / 100 } as any
+  return { ...data, image: data.product_images?.sort((a: any, b: any) => a.sort_order - b.sort_order)[0]?.url || getProduct(data.slug)?.image, category: data.categories?.name ?? 'Art', price: (data.product_sizes?.[0]?.price_cents ?? 3200) / 100 } as any
 }
 
 export async function fetchPublishedProducts() {
@@ -30,7 +31,7 @@ export async function fetchPublishedProducts() {
   if (error) throw error
   return (data ?? []).map((product: any) => ({
     ...product,
-    image: product.product_images?.sort((a: any, b: any) => a.sort_order - b.sort_order)[0]?.url,
+    image: product.product_images?.sort((a: any, b: any) => a.sort_order - b.sort_order)[0]?.url || getProduct(product.slug)?.image,
     category: product.categories?.name ?? 'Art',
     price: (product.product_sizes?.[0]?.price_cents ?? 3200) / 100,
   })) as CatalogProduct[]
