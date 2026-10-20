@@ -1,3 +1,4 @@
+import { put } from '@vercel/blob'
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 
@@ -20,13 +21,17 @@ export async function POST(request: Request) {
   const productId = String(form.get('productId') || crypto.randomUUID())
   const safeName = file.name.toLowerCase().replace(/[^a-z0-9.]+/g, '-').replace(/(^-|-$)/g, '') || 'image'
   const path = `${productId}/${crypto.randomUUID()}-${safeName}`
-  const { error: uploadError } = await supabase.storage.from('product-media').upload(path, file, { contentType: file.type, upsert: false })
-  if (uploadError) return NextResponse.json({ error: 'Upload failed' }, { status: 400 })
+  let blob
+  try {
+    blob = await put(`products/${path}`, file, { access: 'public', addRandomSuffix: false, contentType: file.type })
+  } catch (error) {
+    console.error('[v0] Product Blob upload failed:', error)
+    return NextResponse.json({ error: 'Upload failed' }, { status: 400 })
+  }
 
-  const { data: publicUrl } = supabase.storage.from('product-media').getPublicUrl(path)
   if (form.get('productId')) {
-    const { error } = await supabase.from('product_images').insert({ product_id: productId, url: publicUrl.publicUrl, alt: String(form.get('alt') || ''), sort_order: Number(form.get('sortOrder') || 0) })
+    const { error } = await supabase.from('product_images').insert({ product_id: productId, url: blob.url, alt: String(form.get('alt') || ''), sort_order: Number(form.get('sortOrder') || 0) })
     if (error) return NextResponse.json({ error: 'Image uploaded but could not attach it to the product' }, { status: 400 })
   }
-  return NextResponse.json({ url: publicUrl.publicUrl, path })
+  return NextResponse.json({ url: blob.url, path: blob.pathname })
 }
