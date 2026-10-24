@@ -19,12 +19,12 @@ const resources = {
 } as const
 const tables = { designs: 'studio_designs' as const, products: 'products' as const, product_sizes: 'product_sizes' as const, product_images: 'product_images' as const, frame_options: 'frame_options' as const, paper_options: 'paper_options' as const, categories: 'categories' as const, orders: 'orders' as const, customers: 'customers' as const, discounts: 'discounts' as const, posts: 'posts' as const, social_posts: 'social_posts' as const, site_content: 'site_content' as const }
 
-async function staff() {
+async function staff(allowSupport = false) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { supabase, response: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) }
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
-  if (!profile || !['owner', 'manager', 'support'].includes(profile.role)) return { supabase, response: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) }
+  if (!profile || !(allowSupport ? ['owner', 'manager', 'support'] : ['owner', 'manager']).includes(profile.role)) return { supabase, response: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) }
   return { supabase, user }
 }
 
@@ -35,10 +35,11 @@ async function audit(supabase: any, actorId: string, action: string, resource: s
 export async function GET(request: Request, { params }: { params: Promise<{ resource: string }> }) {
   const { resource } = await params
   if (!(resource in tables)) return NextResponse.json({ error: 'Unknown resource' }, { status: 404 })
-  const auth = await staff(); if (auth.response) return auth.response
-  const url = new URL(request.url); const limit = Math.min(Number(url.searchParams.get('limit') || 100), 200)
+  const auth = await staff(true); if (auth.response) return auth.response
+  const url = new URL(request.url); const requestedLimit = Number(url.searchParams.get('limit') || 100)
+  const limit = Number.isFinite(requestedLimit) ? Math.max(1, Math.min(Math.floor(requestedLimit), 200)) : 100
   let query = auth.supabase.from(tables[resource as keyof typeof tables]).select('*').limit(limit)
-  if (resource !== 'categories' && resource !== 'site_content') query = query.order('created_at', { ascending: false })
+  if (['products', 'product_sizes', 'product_images', 'orders', 'customers', 'designs', 'discounts', 'posts', 'social_posts'].includes(resource)) query = query.order('created_at', { ascending: false })
   const { data, error } = await query
   if (error) return NextResponse.json({ error: 'Could not load resource' }, { status: 500 })
   return NextResponse.json({ data })
@@ -48,10 +49,17 @@ export async function POST(request: Request, { params }: { params: Promise<{ res
   const { resource } = await params; const keys = resources[resource as keyof typeof resources]
   if (!keys || !(resource in tables)) return NextResponse.json({ error: 'Unknown resource' }, { status: 404 })
   const auth = await staff(); if (auth.response) return auth.response
-  const body = await request.json(); const payload = Object.fromEntries(Object.entries(body).filter(([key]) => keys.includes(key as never)))
-  const { data, error } = await auth.supabase.from(tables[resource as keyof typeof tables]).insert(payload).select().single()
+  let body: Record<string, unknown>
+  try { body = await request.json() } catch { return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 }) }
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return NextResponse.json({ error: 'A JSON object is required' }, { status: 400 })
+  const payload = Object.fromEntries(Object.entries(body).filter(([key]) => keys.includes(key as never)))
+  if (!Object.keys(payload).length) return NextResponse.json({ error: 'No supported fields provided' }, { status: 400 })
+  const table = auth.supabase.from(tables[resource as keyof typeof tables])
+  const { data, error } = resource === 'site_content'
+    ? await table.upsert(payload, { onConflict: 'key' }).select().single()
+    : await table.insert(payload).select().single()
   if (error) return NextResponse.json({ error: 'Could not create resource' }, { status: 400 })
-  await audit(auth.supabase, auth.user.id, 'create', resource, data?.id ?? null, data)
+  await audit(auth.supabase, auth.user.id, 'create', resource, data?.id ?? data?.key ?? null, data)
   revalidatePath('/'); revalidatePath('/shop'); if (resource === 'products') revalidateTag('catalog', 'max')
   return NextResponse.json({ data }, { status: 201 })
 }
@@ -60,9 +68,13 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ re
   const { resource } = await params; const keys = resources[resource as keyof typeof resources]
   if (!keys || !(resource in tables)) return NextResponse.json({ error: 'Unknown resource' }, { status: 404 })
   const auth = await staff(); if (auth.response) return auth.response
-  const body = await request.json(); const id = body.id; if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 })
-  const payload = Object.fromEntries(Object.entries(body).filter(([key]) => key !== 'id' && keys.includes(key as never)))
-  const { data, error } = await auth.supabase.from(tables[resource as keyof typeof tables]).update(payload).eq('id', id).select().single()
+  let body: Record<string, unknown>
+  try { body = await request.json() } catch { return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 }) }
+  const identityField = resource === 'site_content' ? 'key' : 'id'
+  const id = body?.[identityField]; if (typeof id !== 'string' || !id) return NextResponse.json({ error: `${identityField} is required` }, { status: 400 })
+  const payload = Object.fromEntries(Object.entries(body).filter(([key]) => key !== identityField && keys.includes(key as never)))
+  if (!Object.keys(payload).length) return NextResponse.json({ error: 'No supported fields provided' }, { status: 400 })
+  const { data, error } = await auth.supabase.from(tables[resource as keyof typeof tables]).update(payload).eq(identityField, id).select().single()
   if (error) return NextResponse.json({ error: 'Could not update resource' }, { status: 400 })
   await audit(auth.supabase, auth.user.id, 'update', resource, id, data)
   revalidatePath('/'); revalidatePath('/shop'); if (resource === 'products') revalidateTag('catalog', 'max')
@@ -73,8 +85,9 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ r
   const { resource } = await params
   if (!(resource in tables)) return NextResponse.json({ error: 'Unknown resource' }, { status: 404 })
   const auth = await staff(); if (auth.response) return auth.response
-  const id = new URL(request.url).searchParams.get('id'); if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 })
-  const { error } = await auth.supabase.from(tables[resource as keyof typeof tables]).delete().eq('id', id)
+  const identityField = resource === 'site_content' ? 'key' : 'id'
+  const id = new URL(request.url).searchParams.get(identityField) || new URL(request.url).searchParams.get('id'); if (!id) return NextResponse.json({ error: `${identityField} is required` }, { status: 400 })
+  const { error } = await auth.supabase.from(tables[resource as keyof typeof tables]).delete().eq(identityField, id)
   if (error) return NextResponse.json({ error: 'Could not delete resource' }, { status: 400 })
   await audit(auth.supabase, auth.user.id, 'delete', resource, id, null)
   revalidatePath('/'); revalidatePath('/shop'); if (resource === 'products') revalidateTag('catalog', 'max')
