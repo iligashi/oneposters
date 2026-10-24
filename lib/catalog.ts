@@ -16,9 +16,9 @@ export type CatalogProduct = {
   orientation?: Product['orientation']
 }
 
-export function toStoreProduct(product: CatalogProduct): Product {
+export function toStoreProduct(product: CatalogProduct): Product & { id?: string } {
   return {
-    slug: product.slug, title: product.title, description: product.description || '',
+    id: product.id, slug: product.slug, title: product.title, description: product.description || '',
     category: product.category || 'Art', price: product.price ?? 32,
     image: product.image || '/images/admin-poster-placeholder.png',
     colors: product.colors || [], sizes: product.sizes || [], orientation: product.orientation || 'Portrait',

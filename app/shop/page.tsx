@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import { useMemo, useState } from 'react'
 import useSWR from 'swr'
@@ -13,7 +13,8 @@ const initialFilters: ShopFilters = { category: '', size: '', color: '', maxPric
 
 export default function ShopPage() {
   const { data: remoteProducts } = useSWR('published-products', fetchPublishedProducts, { revalidateOnFocus: false })
-  const catalog: Product[] = remoteProducts?.length ? remoteProducts.map(toStoreProduct) : fallbackProducts
+  const catalog: Product[] = remoteProducts !== undefined ? remoteProducts.map(toStoreProduct) : fallbackProducts
+  const featured = catalog.length ? catalog : fallbackProducts
   const [filters, setFilters] = useState(initialFilters)
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState('featured')
@@ -47,8 +48,8 @@ export default function ShopPage() {
         <a href="#collection" className={styles.heroLink}>Explore the collection <ArrowRight size={15} /></a>
       </div>
       <div className={styles.heroArt} aria-label="Featured print collection">
-        <div className={`${styles.heroPrint} ${styles.heroPrintBack}`}><img src={catalog[1]?.image || catalog[0]?.image} alt="Featured abstract print" /></div>
-        <div className={`${styles.heroPrint} ${styles.heroPrintFront}`}><img src={catalog[0]?.image} alt="Featured poster" /><span>ONE / 001</span></div>
+        <div className={`${styles.heroPrint} ${styles.heroPrintBack}`}><img src={featured[1]?.image || featured[0]?.image} alt="Featured abstract print" /></div>
+        <div className={`${styles.heroPrint} ${styles.heroPrintFront}`}><img src={featured[0]?.image} alt="Featured poster" /><span>ONE / 001</span></div>
         <div className={styles.heroSeal}><span>MADE<br />TO LIVE<br />WITH</span><i>✳</i></div>
       </div>
       <div className={styles.heroFoot}><span>01 — 20</span><span>Printed to order in our studio</span><span>EU / EUR</span></div>
