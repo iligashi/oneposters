@@ -1,0 +1,52 @@
+﻿.home { min-width: 0; overflow-x: clip; }
+@media (max-width: 800px) {
+  .home :global(.store-hero) { min-height: 0; padding: 46px 20px 340px; display: block; overflow: hidden; }
+  .home :global(.hero-copy-store) { width: 100%; }
+  .home :global(.hero-copy-store h1) { max-width: 100%; font-size: clamp(54px, 16vw, 68px); line-height: .84; margin: 18px 0 20px; letter-spacing: -.09em; }
+  .home :global(.hero-copy-store > p:not(.kicker)) { max-width: 34ch; font-size: 14px; }
+  .home :global(.hero-actions) { flex-wrap: wrap; gap: 13px 18px; margin-top: 22px; }
+  .home :global(.hero-poster) { top: auto; right: 9%; bottom: 54px; width: min(43vw, 160px); height: auto; aspect-ratio: 250 / 340; padding: 7px; }
+  .home :global(.hero-poster-front) { right: 29%; bottom: 30px; }
+  .home :global(.hero-sticker) { display: none; }
+  .home :global(.hero-scroll) { left: 20px; bottom: 11px; font-size: 8px; z-index: 2; }
+  .home :global(.store-section) { padding: 62px 20px; }
+  .home :global(.category-tabs) { max-width: calc(100% + 40px); margin: 0 -20px 22px; padding: 0 20px 8px; overflow-x: auto; scrollbar-width: none; }
+  .home :global(.category-tabs::-webkit-scrollbar) { display: none; }
+  .home :global(.category-tabs button) { flex: 0 0 auto; }
+  .home :global(.poster-grid) { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 12px; }
+  .home :global(.poster-card) { min-width: 0; }
+  .home :global(.poster-meta) { gap: 8px; }
+  .home :global(.poster-meta h3) { font-size: 12px; }
+  .home :global(.poster-meta strong) { white-space: nowrap; }
+  .home :global(.trust-strip) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .home :global(.trust-strip article) { padding: 20px 14px; gap: 9px; }
+  .home :global(.trust-strip article > svg) { width: 16px; }
+  .home :global(.trust-strip strong) { font-size: 11px; }
+  .home :global(.trust-strip p) { font-size: 10px; }
+  .home :global(.studio-banner), .home :global(.club-section) { flex-direction: column; padding: 62px 20px; }
+  .home :global(.studio-stack) { width: min(100%, 320px); margin: 24px auto 0; }
+  .home :global(.club-section form) { width: 100%; max-width: 420px; align-self: stretch; }
+  .home :global(.category-grid) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .home :global(.category-tile) { min-height: 145px; padding: 14px; }
+  .home :global(.category-tile h3) { font-size: clamp(20px, 6vw, 27px); }
+  .home :global(.story-section) { grid-template-columns: 1fr; min-height: 0; }
+  .home :global(.story-image) { height: clamp(230px, 70vw, 340px); }
+  .home :global(.story-copy) { padding: 58px 20px; }
+  .home :global(.store-footer) { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px 16px; padding: 38px 20px; }
+  .home :global(.store-footer > small) { grid-column: 1 / -1; }
+  .home :global(.section-topline) { align-items: flex-start; gap: 16px; flex-direction: column; }
+  .home :global(.reviews-section) { padding: 62px 20px; }
+  .home :global(.review-note) { margin-top: 4px; }
+}
+@media (hover: none) {
+  .home :global(.quick-add) { opacity: 1; transform: none; }
+}
+@media (max-width: 380px) {
+  .home :global(.store-topbar) { gap: 8px; padding-inline: 12px; font-size: 8px; }
+  .home :global(.store-hero) { padding-inline: 16px; }
+  .home :global(.hero-copy-store h1) { font-size: clamp(52px, 16.5vw, 62px); }
+  .home :global(.store-section) { padding-inline: 16px; }
+  .home :global(.category-grid) { gap: 8px; }
+  .home :global(.store-footer) { padding-inline: 16px; }
+}
+.home :global(.catalog-empty) { grid-column: 1 / -1; margin: 10px 0 0; padding: 42px 20px; border: 1px solid var(--line); color: var(--muted); text-align: center; font-size: 14px; }
