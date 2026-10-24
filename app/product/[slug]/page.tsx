@@ -21,9 +21,9 @@ const dimensions: Record<string, string> = { A4: '21 × 29.7 cm', A3: '29.7 × 4
 
 export default function ProductPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params)
-  const { data: remoteProduct, isLoading } = useSWR(['published-product', slug], () => fetchPublishedProduct(slug))
+  const { data: remoteProduct, isLoading, error } = useSWR(['published-product', slug], () => fetchPublishedProduct(slug))
   const fallback = getProduct(slug)
-  const product = (remoteProduct || fallback) as ProductRecord | undefined
+  const product = (remoteProduct ?? ((isLoading || error) ? fallback : undefined)) as ProductRecord | undefined
   const addToCart = useCartStore(state => state.add)
   const [size, setSize] = useState('A3')
   const [frame, setFrame] = useState('none')

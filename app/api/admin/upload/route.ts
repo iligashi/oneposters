@@ -33,8 +33,13 @@ export async function POST(request: Request) {
   }
 
   if (suppliedProductId) {
-    const { error } = await supabase.from('product_images').insert({ product_id: productId, url: blob.url, alt: String(form.get('alt') || ''), sort_order: Number(form.get('sortOrder') || 0) })
-    if (error) return NextResponse.json({ error: 'Image uploaded but could not attach it to the product' }, { status: 400 })
+    const { data: existingImages, error: lookupError } = await supabase.from('product_images').select('id').eq('product_id', productId).order('sort_order', { ascending: true }).limit(1)
+    if (lookupError) return NextResponse.json({ error: 'Image uploaded but could not update the product image' }, { status: 400 })
+    const image = { url: blob.url, alt: String(form.get('alt') || '') }
+    const result = existingImages?.length
+      ? await supabase.from('product_images').update(image).eq('id', existingImages[0].id)
+      : await supabase.from('product_images').insert({ ...image, product_id: productId, sort_order: 0 })
+    if (result.error) return NextResponse.json({ error: 'Image uploaded but could not attach it to the product' }, { status: 400 })
   }
   return NextResponse.json({ url: blob.url, path: blob.pathname })
 }
