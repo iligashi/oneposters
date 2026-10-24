@@ -4,6 +4,7 @@ import { getCustomPrintPriceCents } from '@/lib/pricing'
 
 type OrderItemInput = {
   productId?: unknown
+  productSlug?: unknown
   title?: unknown
   price?: unknown
   quantity?: unknown
@@ -64,12 +65,15 @@ export async function POST(request: Request) {
         }
       }
 
-      if (typeof item.productId !== 'string' || !item.productId) return null
-      const { data: product, error } = await supabase.from('products')
+      const productSlug = text(item.productSlug, 160)
+      const productLookup = supabase.from('products')
         .select('id, title, product_sizes(label, price_cents)')
-        .eq('id', item.productId)
         .eq('status', 'published')
-        .maybeSingle()
+      const productQuery = typeof item.productId === 'string' && item.productId
+        ? productLookup.eq('id', item.productId)
+        : productSlug ? productLookup.eq('slug', productSlug) : null
+      if (!productQuery) return null
+      const { data: product, error } = await productQuery.maybeSingle()
       if (error || !product) return null
 
       const sizes = (product.product_sizes || []) as Array<{ label: string; price_cents: number }>
@@ -98,9 +102,6 @@ export async function POST(request: Request) {
     const shippingCents = subtotalCents >= 7500 ? 0 : delivery === 'express' ? 990 : 490
     const discountCents = body.promo === 'WELCOME10' ? Math.round(subtotalCents * 0.1) : 0
     const totalCents = subtotalCents - discountCents + shippingCents
-    if (body.subtotalCents !== subtotalCents || body.shippingCents !== shippingCents || body.totalCents !== totalCents) {
-      return NextResponse.json({ error: 'Order totals changed. Refresh checkout and try again.' }, { status: 400 })
-    }
 
     const { data: customer, error: customerError } = await supabase.from('customers').upsert({ email, name }, { onConflict: 'email' }).select('id').single()
     if (customerError) throw customerError
@@ -124,7 +125,7 @@ export async function POST(request: Request) {
       await supabase.from('orders').delete().eq('id', order.id)
       throw itemsError
     }
-    return NextResponse.json({ orderNumber: order.order_number }, { status: 201 })
+    return NextResponse.json({ orderNumber: order.order_number, subtotalCents, shippingCents, discountCents, totalCents, currency: 'EUR' }, { status: 201 })
   } catch (error) {
     console.error('[oneposters] Order request failed:', error)
     return NextResponse.json({ error: 'Could not create order request' }, { status: 500 })
