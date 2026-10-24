@@ -79,7 +79,7 @@ export default function Home() {
 
       <section className="club-section"><div><p className="kicker">The oneposters Art Club</p><h2>Good things<br />in your inbox.</h2></div><div><p>New drops and studio notes, when we have something worth sharing.</p><a className="text-link" href="mailto:hello@oneposters.studio?subject=Join%20the%20oneposters%20Art%20Club">Get in touch <ArrowRight /></a></div></section>
 
-      <footer id="footer" className="store-footer"><a className="store-logo" href="#top"><span>one</span><small>posters</small></a><div><p>Posters for people with places to go.</p><a href="mailto:hello@oneposters.studio">hello@oneposters.studio</a></div><div className="footer-links"><a href="/shop">Shop</a><a href="/studio">Create</a><a href="/about">About</a><a href="/faq">FAQ</a><a href="/shipping-returns">Shipping & returns</a><a href="/contact">Contact</a><a href="https://www.instagram.com/oneposterss" target="_blank" rel="noreferrer">Instagram ↗</a></div><small>© oneposters {new Date().getFullYear()}</small></footer>
+      <footer id="footer" className="store-footer"><a className="store-logo" href="#top"><span>one</span><small>posters</small></a><div><p>Posters for people with places to go.</p><a href="mailto:hello@oneposters.studio">hello@oneposters.studio</a></div><div className="footer-links"><a href="/shop">Shop</a><a href="/studio">Create</a><a href="/about">About</a><a href="/faq">FAQ</a><a href="/shipping-returns">Shipping & returns</a><a href="/privacy">Privacy</a><a href="/contact">Contact</a><a href="https://www.instagram.com/oneposterss" target="_blank" rel="noreferrer">Instagram ↗</a></div><small>© oneposters {new Date().getFullYear()}</small></footer>
     </main>
   )
 }
