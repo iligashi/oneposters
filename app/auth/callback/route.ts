@@ -8,5 +8,7 @@ export async function GET(request: Request) {
     const supabase = await createClient()
     await supabase.auth.exchangeCodeForSession(code)
   }
-  return NextResponse.redirect(new URL(url.searchParams.get('next') ?? '/', url.origin))
+  const destination = url.searchParams.get('next') ?? '/'
+  const safeDestination = destination.startsWith('/') && !destination.startsWith('//') ? destination : '/'
+  return NextResponse.redirect(new URL(safeDestination, url.origin))
 }

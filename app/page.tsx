@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import useSWR from 'swr'
-import { fetchPublishedProducts } from '@/lib/catalog'
+import { fetchPublishedProducts, type CatalogProduct } from '@/lib/catalog'
 import { ArrowRight, ChevronDown, Heart, Menu, MoveRight, Search, ShoppingBag, Sparkles, Upload } from 'lucide-react'
 import { CartButton, CartDrawer } from '@/components/cart'
 import { useCartStore } from '@/lib/cart-store'
@@ -21,15 +21,16 @@ const categories = ['Fashion', 'Japanese', 'Art', 'Kitchen', 'Kids', 'Botanical'
 
 export default function Home() {
   const addToCart = useCartStore((state) => state.add)
-  const [liked, setLiked] = useState<number[]>([])
+  const [liked, setLiked] = useState<(string | number)[]>([])
   const [activeCategory, setActiveCategory] = useState('All')
   const [searchOpen, setSearchOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [email, setEmail] = useState('')
   const [subscribed, setSubscribed] = useState(false)
   const { data: remoteProducts } = useSWR('published-products-home', fetchPublishedProducts, { revalidateOnFocus: false })
-  const catalog = remoteProducts?.length ? remoteProducts : posters
-  const filtered = useMemo(() => activeCategory === 'All' ? catalog : catalog.filter((poster: any) => poster.category === activeCategory), [activeCategory, catalog])
+  type HomePoster = { id: string | number; title: string; category: string; price: number; image: string; color?: string }
+  const catalog: HomePoster[] = remoteProducts?.length ? remoteProducts.map((product: CatalogProduct) => ({ ...product, id: product.id || product.slug, image: product.image || '/images/admin-poster-placeholder.png', category: product.category || 'Art', price: product.price ?? 32 })) : posters
+  const filtered = useMemo(() => activeCategory === 'All' ? catalog : catalog.filter(poster => poster.category === activeCategory), [activeCategory, catalog])
 
   return (
     <main className="storefront"><VisualEnhancements />
@@ -49,7 +50,7 @@ export default function Home() {
       <div className="marquee"><div>ART · COLOR · FORM · CULTURE · YOUR WALL · ART · COLOR · FORM · CULTURE · YOUR WALL · </div></div>
       <TrustStrip />
 
-      <section id="shop" className="store-section"><div className="section-topline"><div><p className="kicker">The edit</p><h2>New arrivals<span>.</span></h2></div><a className="text-link" href="#shop">View all <ArrowRight /></a></div><div className="category-tabs"><button className={activeCategory === 'All' ? 'active' : ''} onClick={() => setActiveCategory('All')}>All</button>{Array.from(new Set(catalog.map((poster: any) => poster.category))).slice(0, 4).map((category) => <button key={category} className={activeCategory === category ? 'active' : ''} onClick={() => setActiveCategory(category)}>{category}</button>)}</div><div className="poster-grid">{filtered.map((poster) => <article className="poster-card" key={poster.id}><div className="poster-image"><img src={poster.image} alt={poster.title} /><button aria-label={`Add ${poster.title} to wishlist`} onClick={() => setLiked((items) => items.includes(poster.id) ? items.filter((id) => id !== poster.id) : [...items, poster.id])} className="heart-button"><Heart fill={liked.includes(poster.id) ? 'currentColor' : 'none'} /></button><button className="quick-add" onClick={() => addToCart({id: String(poster.id), title: poster.title, image: poster.image, price: poster.price, category: poster.category})}>Quick add <PlusIcon /></button></div><div className="poster-meta"><div><h3>{poster.title}</h3><p>{poster.category}</p></div><strong>€{poster.price}</strong></div></article>)}</div></section>
+      <section id="shop" className="store-section"><div className="section-topline"><div><p className="kicker">The edit</p><h2>New arrivals<span>.</span></h2></div><a className="text-link" href="#shop">View all <ArrowRight /></a></div><div className="category-tabs"><button className={activeCategory === 'All' ? 'active' : ''} onClick={() => setActiveCategory('All')}>All</button>{Array.from(new Set(catalog.map(poster => poster.category))).slice(0, 4).map((category) => <button key={category} className={activeCategory === category ? 'active' : ''} onClick={() => setActiveCategory(category)}>{category}</button>)}</div><div className="poster-grid">{filtered.map((poster) => <article className="poster-card" key={poster.id}><div className="poster-image"><img src={poster.image} alt={poster.title} /><button aria-label={`Add ${poster.title} to wishlist`} onClick={() => setLiked((items) => items.includes(poster.id) ? items.filter((id) => id !== poster.id) : [...items, poster.id])} className="heart-button"><Heart fill={liked.includes(poster.id) ? 'currentColor' : 'none'} /></button><button className="quick-add" onClick={() => addToCart({id: String(poster.id), title: poster.title, image: poster.image, price: poster.price, category: poster.category})}>Quick add <PlusIcon /></button></div><div className="poster-meta"><div><h3>{poster.title}</h3><p>{poster.category}</p></div><strong>€{poster.price}</strong></div></article>)}</div></section>
 
       <section id="studio" className="studio-banner"><div><p className="kicker">Your wall, your rules</p><h2>Upload a little<br /><i>more you.</i></h2><p>Turn a photo, a sketch or a feeling into a poster made just for your space.</p><a className="cream-button" href="/studio"><Upload /> Open the poster studio</a></div><div className="studio-stack"><div className="studio-card card-one">DRAG<br />YOUR<br /><span>ART</span></div><div className="studio-card card-two"><Sparkles /><span>MADE<br />BY YOU</span></div></div></section>
 
