@@ -9,6 +9,8 @@ import { getProduct, products, type Product } from '@/data/products'
 import { useCartStore } from '@/lib/cart-store'
 import { fetchPublishedProduct } from '@/lib/catalog'
 import { Header, ProductCard, SearchPalette } from '@/components/store'
+import { RecentlyViewed } from '@/components/recently-viewed'
+import { trackRecentlyViewed } from '@/lib/recently-viewed'
 import styles from './product.module.css'
 
 type RemoteImage = { id?: string; url: string; alt?: string | null }
@@ -49,6 +51,7 @@ export default function ProductPage({ params }: { params: Promise<{ slug: string
 
   useEffect(() => {
     if (!product) return
+    trackRecentlyViewed(slug)
     try { setLiked((JSON.parse(localStorage.getItem('oneposters-wishlist') || '[]') as string[]).includes(slug)) } catch { setLiked(false) }
     setGalleryIndex(0)
   }, [slug, product?.image])
@@ -99,7 +102,9 @@ export default function ProductPage({ params }: { params: Promise<{ slug: string
     </section>
 
     {related.length > 0 && <section className={styles.related}><div className={styles.relatedHeading}><div><span className={styles.eyebrow}>KEEP LOOKING</span><h2>Works well <em>with.</em></h2></div><Link href="/shop">All prints <ArrowRight size={14} /></Link></div><div className={styles.relatedGrid}>{related.map(item => <ProductCard key={item.slug} product={item} layoutId={false} />)}</div></section>}
+    <RecentlyViewed excludeSlug={slug} />
     <div className={styles.mobileBuy}><div><span>Total</span><strong>€{price.toFixed(2)}</strong></div><button onClick={add}>Add to bag <ArrowRight size={15} /></button></div>
     <SearchPalette open={searchOpen} close={() => setSearchOpen(false)} />
   </main>
 }
+

@@ -6,6 +6,7 @@ import { ArrowRight, ChevronDown, Search, SlidersHorizontal, X } from 'lucide-re
 import { categories, products as fallbackProducts, type Product } from '@/data/products'
 import { fetchPublishedProducts, toStoreProduct } from '@/lib/catalog'
 import { FilterDrawer, Header, ProductCard, SearchPalette } from '@/components/store'
+import { RecentlyViewed } from '@/components/recently-viewed'
 import styles from './shop.module.css'
 
 type ShopFilters = { category: string; size: string; color: string; maxPrice: number }
@@ -78,6 +79,7 @@ export default function ShopPage() {
         </div>
       </div>
     </section>
+    <RecentlyViewed />
     <footer className={styles.shopFooter}><span>Objects for the everyday.</span><a href="/studio">Make a print of your own <ArrowRight size={14} /></a></footer>
     {showFilters && <div className={styles.mobileFilterOverlay} onClick={() => setShowFilters(false)}><aside className={styles.mobileFilterPanel} onClick={event => event.stopPropagation()}><div className={styles.mobileFilterHead}><div><span className={styles.eyebrow}>REFINE THE EDIT</span><h2>Filters</h2></div><button onClick={() => setShowFilters(false)} aria-label="Close filters"><X size={18} /></button></div><FilterContents filters={filters} setFilter={setFilter} clear={clearFilters} /><button className={styles.showResults} onClick={() => setShowFilters(false)}>Show {filtered.length} prints <ArrowRight size={15} /></button></aside></div>}
     <SearchPalette open={searchOpen} close={() => setSearchOpen(false)} />
@@ -93,3 +95,4 @@ function FilterContents({ filters, setFilter, clear }: { filters: ShopFilters; s
   </>
 }
 function FilterGroup({ title, children }: { title: string; children: React.ReactNode }) { return <section className={styles.filterGroup}><h3>{title}</h3>{children}</section> }
+
