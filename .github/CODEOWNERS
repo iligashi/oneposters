@@ -1,0 +1,8 @@
+# Default reviewer for every change.
+* @iligashi
+
+# Security-sensitive areas: database policies, auth, payments/orders, admin API.
+/supabase/          @iligashi
+/lib/security.ts    @iligashi
+/lib/staff.ts       @iligashi
+/app/api/           @iligashi
