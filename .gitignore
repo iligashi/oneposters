@@ -1,3 +1,40 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Next.js / build output
+.next/
+out/
+build/
+next-env.d.ts
+*.tsbuildinfo
+
+# Tests
+coverage/
+
+# Environment variables (only the documented template is committed)
+.env*
+!.env.example
+
+# Vercel
+.vercel/
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Keys and certificates
+*.pem
+*.key
+
 # v0 sandbox internal files
 __v0_runtime_loader.js
 __v0_devtools.tsx
@@ -5,14 +42,3 @@ __v0_jsx-dev-runtime.ts
 .snowflake/
 .design-cache/
 .v0-trash/
-.vercel/
-
-# Environment variables
-.env*
-!.env.example
-
-# Common ignores
-node_modules
-.next/
-.DS_Store
-*.tsbuildinfo
