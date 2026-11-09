@@ -59,7 +59,7 @@ function ProductEditor({ product, categories, editable, notify, close }: { produ
   const [saved, setSaved] = useState<Row | null>(product)
   const [form, setForm] = useState({
     title: product?.title || '', slug: product?.slug || '', description: product?.description || '', category_id: product?.category_id || '',
-    status: product?.status || 'draft', seo_title: product?.seo_title || '', seo_description: product?.seo_description || '',
+    status: product?.status || 'published', seo_title: product?.seo_title || '', seo_description: product?.seo_description || '',
   })
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
@@ -83,6 +83,7 @@ function ProductEditor({ product, categories, editable, notify, close }: { produ
         <Field label="Description" value={form.description} onChange={v => set('description', v)} textarea disabled={!editable} />
         <Select label="Category" value={form.category_id} onChange={v => set('category_id', v)} options={[['', 'Uncategorized'], ...categories.map(c => [c.id, c.name] as const)]} disabled={!editable} />
         <Select label="Status" value={form.status} onChange={v => set('status', v)} options={PRODUCT_STATUSES} disabled={!editable} />
+        {(saved?.status ?? form.status) !== 'published' && <p className={styles.hint}>{saved ? `This product is "${saved.status}" and is hidden from the shop.` : `Saved as "${form.status}", this product will be hidden from the shop.`} Set the status to "published" and save to show it.</p>}
         <Field label="SEO title" value={form.seo_title} onChange={v => set('seo_title', v)} disabled={!editable} />
         <Field label="SEO description" value={form.seo_description} onChange={v => set('seo_description', v)} textarea disabled={!editable} />
         {error && <p className={styles.error}>{error}</p>}
@@ -160,19 +161,24 @@ function SizesEditor({ productId, editable, notify }: { productId: string; edita
 function ImagesEditor({ productId, title, editable, notify }: { productId: string; title: string; editable: boolean; notify: (m: string) => void }) {
   const images = useList('product_images', { product_id: productId }, 50)
   const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState('')
 
   async function upload(files: FileList | null) {
     if (!files?.length) return
-    setUploading(true)
-    try {
-      for (const file of Array.from(files)) {
+    setUploading(true); setUploadError('')
+    const failed: string[] = []
+    for (const file of Array.from(files)) {
+      try {
         const body = new FormData(); body.append('file', file); body.append('productId', productId); body.append('alt', title)
         const response = await fetch('/api/admin/upload', { method: 'POST', body })
         const json = await response.json().catch(() => ({}))
-        if (!response.ok) throw new Error(json.error || `Could not upload ${file.name}`)
-      }
-      notify('Images uploaded.')
-    } catch (e: any) { notify(e.message) } finally { setUploading(false); images.refresh() }
+        if (response.status === 413) throw new Error('the file is too large for the server (keep images under 4 MB)')
+        if (!response.ok) throw new Error(json.error || `upload failed (${response.status})`)
+      } catch (e: any) { failed.push(`${file.name}: ${e.message}`) }
+    }
+    setUploading(false); images.refresh()
+    if (failed.length) setUploadError(`Not uploaded — ${failed.join('; ')}`)
+    else notify(files.length > 1 ? 'Images uploaded.' : 'Image uploaded.')
   }
   async function makeCover(image: Row) {
     try {
@@ -194,7 +200,9 @@ function ImagesEditor({ productId, title, editable, notify }: { productId: strin
       <figcaption>{index === 0 ? 'Cover' : editable ? <button className={styles.textButton} onClick={() => makeCover(image)}>Make cover</button> : null}
         {editable && <button className={styles.textButton} onClick={() => remove(image)}>Remove</button>}</figcaption>
     </figure>)}</div>
-    {editable && <label className={styles.field}>{uploading ? 'Uploading…' : 'Add images (JPG, PNG, WebP, AVIF · max 10 MB)'}<input type="file" multiple accept="image/jpeg,image/png,image/webp,image/avif" disabled={uploading} onChange={e => { upload(e.target.files); e.target.value = '' }} /></label>}
+    {!images.rows.length && !images.loading && <p className={styles.hint}>No images yet — the shop shows a placeholder until you add one.</p>}
+    {uploadError && <p className={styles.error}>{uploadError}</p>}
+    {editable && <label className={styles.field}>{uploading ? 'Uploading…' : 'Add images (JPG, PNG, WebP, AVIF · max 4 MB)'}<input type="file" multiple accept="image/jpeg,image/png,image/webp,image/avif" disabled={uploading} onChange={e => { upload(e.target.files); e.target.value = '' }} /></label>}
   </section>
 }
 
