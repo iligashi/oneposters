@@ -25,12 +25,23 @@ export function toStoreProduct(product: CatalogProduct): Product & { id?: string
   }
 }
 
+type SizeRow = { label?: string | null; price_cents?: number | null }
+
+/** Sizes cheapest first, so the "from" price is the lowest price a customer can pay. */
+export function sortSizesByPrice<T extends SizeRow>(sizes: T[] | null | undefined): T[] {
+  return [...(sizes ?? [])].sort((a, b) => (a.price_cents ?? Infinity) - (b.price_cents ?? Infinity))
+}
+
+export function fromPrice(sizes: SizeRow[] | null | undefined, fallbackCents = 3200) {
+  return (sortSizesByPrice(sizes)[0]?.price_cents ?? fallbackCents) / 100
+}
+
 export async function fetchPublishedProduct(slug: string) {
   const supabase = createClient()
   const { data, error } = await supabase.from('products').select('id, slug, title, description, category_id, product_images(id,url,alt,sort_order), product_sizes(id,label,width_cm,height_cm,price_cents), categories(name)').eq('slug', slug).eq('status', 'published').maybeSingle()
   if (error) throw error
   if (!data) return null
-  return { ...data, image: data.product_images?.sort((a: any, b: any) => a.sort_order - b.sort_order)[0]?.url || getProduct(data.slug)?.image || '/images/admin-poster-placeholder.png', category: data.categories?.name ?? 'Art', price: (data.product_sizes?.[0]?.price_cents ?? 3200) / 100 } as any
+  return { ...data, image: data.product_images?.sort((a: any, b: any) => a.sort_order - b.sort_order)[0]?.url || getProduct(data.slug)?.image || '/images/admin-poster-placeholder.png', category: data.categories?.name ?? 'Art', product_sizes: sortSizesByPrice(data.product_sizes), price: fromPrice(data.product_sizes) } as any
 }
 
 export async function fetchPublishedProducts(): Promise<CatalogProduct[]> {
@@ -43,12 +54,12 @@ export async function fetchPublishedProducts(): Promise<CatalogProduct[]> {
   if (error) throw error
   return (data ?? []).map((product: any) => {
     const fallback = getProduct(product.slug)
-    const sizeLabels = product.product_sizes?.map((size: any) => size.label).filter(Boolean) ?? []
+    const sizeLabels = sortSizesByPrice(product.product_sizes).map((size: any) => size.label).filter(Boolean) ?? []
     return {
       ...product,
       image: product.product_images?.sort((a: any, b: any) => a.sort_order - b.sort_order)[0]?.url || fallback?.image || '/images/admin-poster-placeholder.png',
       category: product.categories?.name ?? 'Art',
-      price: (product.product_sizes?.[0]?.price_cents ?? 3200) / 100,
+      price: fromPrice(product.product_sizes),
       sizes: sizeLabels.length ? sizeLabels : fallback?.sizes ?? [],
       colors: fallback?.colors ?? [], orientation: fallback?.orientation ?? 'Portrait',
     } as CatalogProduct

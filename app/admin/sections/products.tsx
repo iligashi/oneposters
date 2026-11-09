@@ -59,7 +59,7 @@ function ProductEditor({ product, categories, editable, notify, close }: { produ
   const [saved, setSaved] = useState<Row | null>(product)
   const [form, setForm] = useState({
     title: product?.title || '', slug: product?.slug || '', description: product?.description || '', category_id: product?.category_id || '',
-    status: product?.status || 'draft', seo_title: product?.seo_title || '', seo_description: product?.seo_description || '',
+    status: product?.status || 'published', seo_title: product?.seo_title || '', seo_description: product?.seo_description || '',
   })
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
@@ -83,6 +83,7 @@ function ProductEditor({ product, categories, editable, notify, close }: { produ
         <Field label="Description" value={form.description} onChange={v => set('description', v)} textarea disabled={!editable} />
         <Select label="Category" value={form.category_id} onChange={v => set('category_id', v)} options={[['', 'Uncategorized'], ...categories.map(c => [c.id, c.name] as const)]} disabled={!editable} />
         <Select label="Status" value={form.status} onChange={v => set('status', v)} options={PRODUCT_STATUSES} disabled={!editable} />
+        {(saved?.status ?? form.status) !== 'published' && <p className={styles.hint}>{saved ? `This product is "${saved.status}" and is hidden from the shop.` : `Saved as "${form.status}", this product will be hidden from the shop.`} Set the status to "published" and save to show it.</p>}
         <Field label="SEO title" value={form.seo_title} onChange={v => set('seo_title', v)} disabled={!editable} />
         <Field label="SEO description" value={form.seo_description} onChange={v => set('seo_description', v)} textarea disabled={!editable} />
         {error && <p className={styles.error}>{error}</p>}

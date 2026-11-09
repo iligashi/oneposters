@@ -9,13 +9,14 @@ import { FilterDrawer, Header, ProductCard, SearchPalette } from '@/components/s
 import { RecentlyViewed } from '@/components/recently-viewed'
 import styles from './shop.module.css'
 
-type ShopFilters = { category: string; size: string; color: string; maxPrice: number }
-const initialFilters: ShopFilters = { category: '', size: '', color: '', maxPrice: 60 }
+type ShopFilters = { category: string; size: string; color: string; maxPrice: number | null }
+const initialFilters: ShopFilters = { category: '', size: '', color: '', maxPrice: null }
 
 export default function ShopPage() {
   const { data: remoteProducts } = useSWR('published-products', fetchPublishedProducts, { revalidateOnFocus: false })
   const catalog: Product[] = remoteProducts !== undefined ? remoteProducts.map(toStoreProduct) : fallbackProducts
   const featured = catalog.length ? catalog : fallbackProducts
+  const priceCeiling = Math.max(60, ...catalog.map(product => Math.ceil(product.price)))
   const [filters, setFilters] = useState(initialFilters)
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState('featured')
@@ -28,15 +29,15 @@ export default function ShopPage() {
       return matchesQuery && (!filters.category || product.category === filters.category)
         && (!filters.size || product.sizes.includes(filters.size))
         && (!filters.color || product.colors.includes(filters.color))
-        && product.price <= filters.maxPrice
+        && (filters.maxPrice === null || product.price <= filters.maxPrice)
     })
     if (sort === 'price-low') result.sort((a, b) => a.price - b.price)
     if (sort === 'price-high') result.sort((a, b) => b.price - a.price)
     if (sort === 'name') result.sort((a, b) => a.title.localeCompare(b.title))
     return result
   }, [catalog, filters, query, sort])
-  const activeFilters = Number(Boolean(filters.category)) + Number(Boolean(filters.size)) + Number(Boolean(filters.color)) + Number(filters.maxPrice < 60)
-  const setFilter = (key: keyof ShopFilters, value: string | number) => setFilters(current => ({ ...current, [key]: value }))
+  const activeFilters = Number(Boolean(filters.category)) + Number(Boolean(filters.size)) + Number(Boolean(filters.color)) + Number(filters.maxPrice !== null)
+  const setFilter = (key: keyof ShopFilters, value: string | number | null) => setFilters(current => ({ ...current, [key]: value }))
   const clearFilters = () => setFilters(initialFilters)
 
   return <main className={styles.shop}>
@@ -71,7 +72,7 @@ export default function ShopPage() {
       </div>
       <div className={styles.shopBody}>
         <aside className={styles.sidebar}>
-          <FilterContents filters={filters} setFilter={setFilter} clear={clearFilters} />
+          <FilterContents filters={filters} setFilter={setFilter} clear={clearFilters} priceCeiling={priceCeiling} />
         </aside>
         <div className={styles.results}>
           {query && <div className={styles.searchTerm}>Results for “{query}” <button onClick={() => setQuery('')} aria-label="Clear search"><X size={13} /></button></div>}
@@ -81,17 +82,17 @@ export default function ShopPage() {
     </section>
     <RecentlyViewed />
     <footer className={styles.shopFooter}><span>Objects for the everyday.</span><a href="/studio">Make a print of your own <ArrowRight size={14} /></a></footer>
-    {showFilters && <div className={styles.mobileFilterOverlay} onClick={() => setShowFilters(false)}><aside className={styles.mobileFilterPanel} onClick={event => event.stopPropagation()}><div className={styles.mobileFilterHead}><div><span className={styles.eyebrow}>REFINE THE EDIT</span><h2>Filters</h2></div><button onClick={() => setShowFilters(false)} aria-label="Close filters"><X size={18} /></button></div><FilterContents filters={filters} setFilter={setFilter} clear={clearFilters} /><button className={styles.showResults} onClick={() => setShowFilters(false)}>Show {filtered.length} prints <ArrowRight size={15} /></button></aside></div>}
+    {showFilters && <div className={styles.mobileFilterOverlay} onClick={() => setShowFilters(false)}><aside className={styles.mobileFilterPanel} onClick={event => event.stopPropagation()}><div className={styles.mobileFilterHead}><div><span className={styles.eyebrow}>REFINE THE EDIT</span><h2>Filters</h2></div><button onClick={() => setShowFilters(false)} aria-label="Close filters"><X size={18} /></button></div><FilterContents filters={filters} setFilter={setFilter} clear={clearFilters} priceCeiling={priceCeiling} /><button className={styles.showResults} onClick={() => setShowFilters(false)}>Show {filtered.length} prints <ArrowRight size={15} /></button></aside></div>}
     <SearchPalette open={searchOpen} close={() => setSearchOpen(false)} />
   </main>
 }
 
-function FilterContents({ filters, setFilter, clear }: { filters: ShopFilters; setFilter: (key: keyof ShopFilters, value: string | number) => void; clear: () => void }) {
+function FilterContents({ filters, setFilter, clear, priceCeiling }: { filters: ShopFilters; setFilter: (key: keyof ShopFilters, value: string | number | null) => void; clear: () => void; priceCeiling: number }) {
   return <>
     <div className={styles.filterHeading}><span>Refine by</span><button onClick={clear}>Reset</button></div>
     <FilterGroup title="Size"><div className={styles.optionList}>{['A4', 'A3', '30×40', '50×70', '70×100'].map(size => <button key={size} className={filters.size === size ? styles.optionActive : ''} onClick={() => setFilter('size', filters.size === size ? '' : size)}><span>{size}</span><i>{filters.size === size ? '−' : '+'}</i></button>)}</div></FilterGroup>
     <FilterGroup title="Colour"><div className={styles.colorOptions}>{[['Blue','#6d83a7'],['Cream','#dbd0b9'],['Red','#bd6658'],['Green','#71836d']].map(([name, color]) => <button key={name} aria-label={name} title={name} className={`${styles.colorOption} ${filters.color === name ? styles.colorActive : ''}`} onClick={() => setFilter('color', filters.color === name ? '' : name)} style={{ '--swatch': color } as React.CSSProperties}><span />{name}</button>)}</div></FilterGroup>
-    <FilterGroup title="Price"><label className={styles.priceLabel}>Up to <strong>€{filters.maxPrice}</strong></label><input className={styles.priceRange} type="range" min="28" max="60" step="1" value={filters.maxPrice} onChange={event => setFilter('maxPrice', Number(event.target.value))} /></FilterGroup>
+    <FilterGroup title="Price"><label className={styles.priceLabel}>Up to <strong>{filters.maxPrice === null ? 'any price' : `€${filters.maxPrice}`}</strong></label><input className={styles.priceRange} type="range" min="28" max={priceCeiling} step="1" value={filters.maxPrice ?? priceCeiling} onChange={event => { const value = Number(event.target.value); setFilter('maxPrice', value >= priceCeiling ? null : value) }} /></FilterGroup>
   </>
 }
 function FilterGroup({ title, children }: { title: string; children: React.ReactNode }) { return <section className={styles.filterGroup}><h3>{title}</h3>{children}</section> }
