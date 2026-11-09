@@ -99,7 +99,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ reso
   else if (resource === 'customers') query = query.order('email', { ascending: true })
 
   const { data, error, count } = await query
-  if (error) return NextResponse.json({ error: 'Could not load resource' }, { status: 500 })
+  if (error) {
+    console.error(`[oneposters] Admin GET ${resource} failed:`, error.message)
+    return NextResponse.json({ error: 'Could not load resource' }, { status: 500 })
+  }
   return NextResponse.json({ data, count, limit, offset })
 }
 
