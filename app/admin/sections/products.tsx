@@ -6,6 +6,15 @@ import { api, canEdit, euro, fromCents, list, PRODUCT_STATUSES, slugify, toCents
 import { Field, Intro, ListState, Modal, SearchBar, Select } from '../ui'
 import styles from '../admin.module.css'
 
+/** Default print sizes, matching the storefront's fallback pricing (€32 base plus size add-on). */
+const STANDARD_SIZES = [
+  { label: 'A4', width_cm: 21, height_cm: 29.7, price_cents: 3200 },
+  { label: 'A3', width_cm: 29.7, height_cm: 42, price_cents: 4000 },
+  { label: '30×40', width_cm: 30, height_cm: 40, price_cents: 4600 },
+  { label: '50×70', width_cm: 50, height_cm: 70, price_cents: 5400 },
+  { label: '70×100', width_cm: 70, height_cm: 100, price_cents: 6200 },
+]
+
 export function Products({ user, notify }: { user: AdminUser; notify: (message: string) => void }) {
   const [status, setStatus] = useState('')
   const [search, setSearch] = useState('')
@@ -92,6 +101,8 @@ function SizesEditor({ productId, editable, notify }: { productId: string; edita
   const [draft, setDraft] = useState({ label: '', width_cm: '', height_cm: '', price: '' })
   const [error, setError] = useState('')
 
+  const [seeding, setSeeding] = useState(false)
+
   async function add() {
     setError('')
     const price_cents = toCents(draft.price)
@@ -100,6 +111,17 @@ function SizesEditor({ productId, editable, notify }: { productId: string; edita
       await api('product_sizes', 'POST', { product_id: productId, label: draft.label.trim(), width_cm: draft.width_cm ? Number(draft.width_cm) : null, height_cm: draft.height_cm ? Number(draft.height_cm) : null, price_cents })
       setDraft({ label: '', width_cm: '', height_cm: '', price: '' }); sizes.refresh(); notify('Size added.')
     } catch (e: any) { setError(e.message) }
+  }
+  async function addStandardSizes() {
+    setError('')
+    setSeeding(true)
+    try {
+      const existing = new Set(sizes.rows.map(size => size.label))
+      for (const size of STANDARD_SIZES.filter(s => !existing.has(s.label))) {
+        await api('product_sizes', 'POST', { product_id: productId, ...size })
+      }
+      sizes.refresh(); notify('Standard sizes added. Adjust any price, then save.')
+    } catch (e: any) { setError(e.message); sizes.refresh() } finally { setSeeding(false) }
   }
   async function updatePrice(size: Row, value: string) {
     const price_cents = toCents(value)
@@ -113,7 +135,12 @@ function SizesEditor({ productId, editable, notify }: { productId: string; edita
 
   return <section className={styles.subPanel}>
     <h4>Sizes &amp; prices</h4>
-    {!sizes.loading && !sizes.rows.length && <p className={styles.error}>No sizes yet — this product cannot be ordered.</p>}
+    {sizes.error && <p className={styles.error}>Could not load sizes: {sizes.error}</p>}
+    {!sizes.loading && !sizes.error && !sizes.rows.length && <div className={styles.hint}>
+      <p>Add at least one size with a price so customers can order this print.</p>
+      {editable && <button className={styles.primary} onClick={addStandardSizes} disabled={seeding}>{seeding ? 'Adding…' : 'Add standard sizes (A4 – 70×100)'}</button>}
+      <small>Or add a custom size below.</small>
+    </div>}
     {sizes.rows.map(size => <div className={styles.inlineRow} key={size.id}>
       <strong>{size.label}</strong><small>{size.width_cm && size.height_cm ? `${size.width_cm} × ${size.height_cm} cm` : ''}</small>
       {editable ? <label className={styles.priceInput}>€<input defaultValue={fromCents(size.price_cents)} onBlur={e => updatePrice(size, e.target.value)} aria-label={`Price for ${size.label}`} /></label> : <b>{euro(size.price_cents)}</b>}
