@@ -1,12 +1,13 @@
 import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
+import { checkStaff } from '@/lib/staff'
 import AdminDashboard from './admin-dashboard'
 
+export const dynamic = 'force-dynamic'
+
 export default async function AdminPage() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/auth/login?next=/admin')
-  const { data: profile } = await supabase.from('profiles').select('full_name,email,role').eq('id', user.id).maybeSingle()
-  if (!profile || !['owner', 'manager', 'support'].includes(profile.role)) redirect('/account')
-  return <AdminDashboard user={profile} />
+  const staff = await checkStaff()
+  if (staff.status === 'signed-out') redirect('/auth/login?next=/admin')
+  if (staff.status === 'mfa-required') redirect('/admin/mfa')
+  if (staff.status !== 'ok') redirect('/account')
+  return <AdminDashboard user={staff.profile} />
 }
