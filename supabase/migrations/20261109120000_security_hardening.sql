@@ -21,9 +21,13 @@
 
 begin;
 
+-- Clean up helpers from an earlier attempt of this migration. An existing
+-- zero-argument public.is_staff() (if any) is left untouched.
+drop function if exists public.is_staff(text[]);
+
 -- 1. Staff helpers --------------------------------------------------------------
 
-create or replace function public.current_staff_role()
+create or replace function public.oneposters_staff_role()
 returns text
 language sql
 stable
@@ -37,20 +41,20 @@ as $$
     and p.role::text in ('owner', 'manager', 'support')
 $$;
 
-create or replace function public.is_staff(allowed text[] default array['owner', 'manager', 'support'])
+create or replace function public.has_staff_role(allowed text[])
 returns boolean
 language sql
 stable
 security definer
 set search_path = public
 as $$
-  select coalesce(public.current_staff_role() = any(allowed), false)
+  select coalesce(public.oneposters_staff_role() = any(allowed), false)
 $$;
 
-revoke all on function public.current_staff_role() from public;
-revoke all on function public.is_staff(text[]) from public;
-grant execute on function public.current_staff_role() to anon, authenticated, service_role;
-grant execute on function public.is_staff(text[]) to anon, authenticated, service_role;
+revoke all on function public.oneposters_staff_role() from public;
+revoke all on function public.has_staff_role(text[]) from public;
+grant execute on function public.oneposters_staff_role() to anon, authenticated, service_role;
+grant execute on function public.has_staff_role(text[]) to anon, authenticated, service_role;
 
 -- 2. Role changes are owner-only ---------------------------------------------------
 
@@ -67,14 +71,14 @@ begin
   end if;
 
   if tg_op = 'INSERT' then
-    if new.role is distinct from 'customer' and not public.is_staff(array['owner']) then
+    if new.role is distinct from 'customer' and not public.has_staff_role(array['owner']) then
       new.role := 'customer';
     end if;
     return new;
   end if;
 
   if new.role is distinct from old.role then
-    if not public.is_staff(array['owner']) then
+    if not public.has_staff_role(array['owner']) then
       raise exception 'Only an owner can change roles' using errcode = '42501';
     end if;
     if old.id = auth.uid() then
@@ -143,33 +147,33 @@ $$;
 -- profiles: users see and edit their own row (role changes blocked by the trigger);
 -- staff can read all; owners can edit any.
 create policy profiles_select on public.profiles for select
-  using (id = auth.uid() or public.is_staff());
+  using (id = auth.uid() or public.has_staff_role(array['owner', 'manager', 'support']));
 create policy profiles_insert_self on public.profiles for insert
   with check (id = auth.uid());
 create policy profiles_update on public.profiles for update
-  using (id = auth.uid() or public.is_staff(array['owner']))
-  with check (id = auth.uid() or public.is_staff(array['owner']));
+  using (id = auth.uid() or public.has_staff_role(array['owner']))
+  with check (id = auth.uid() or public.has_staff_role(array['owner']));
 
 -- Published catalog is public; everything is editable by owner/manager.
 create policy products_read on public.products for select
-  using (status::text = 'published' or public.is_staff());
+  using (status::text = 'published' or public.has_staff_role(array['owner', 'manager', 'support']));
 create policy products_write on public.products for all
-  using (public.is_staff(array['owner', 'manager']))
-  with check (public.is_staff(array['owner', 'manager']));
+  using (public.has_staff_role(array['owner', 'manager']))
+  with check (public.has_staff_role(array['owner', 'manager']));
 
 create policy product_images_read on public.product_images for select
-  using (public.is_staff() or exists (
+  using (public.has_staff_role(array['owner', 'manager', 'support']) or exists (
     select 1 from public.products p where p.id = product_images.product_id and p.status::text = 'published'));
 create policy product_images_write on public.product_images for all
-  using (public.is_staff(array['owner', 'manager']))
-  with check (public.is_staff(array['owner', 'manager']));
+  using (public.has_staff_role(array['owner', 'manager']))
+  with check (public.has_staff_role(array['owner', 'manager']));
 
 create policy product_sizes_read on public.product_sizes for select
-  using (public.is_staff() or exists (
+  using (public.has_staff_role(array['owner', 'manager', 'support']) or exists (
     select 1 from public.products p where p.id = product_sizes.product_id and p.status::text = 'published'));
 create policy product_sizes_write on public.product_sizes for all
-  using (public.is_staff(array['owner', 'manager']))
-  with check (public.is_staff(array['owner', 'manager']));
+  using (public.has_staff_role(array['owner', 'manager']))
+  with check (public.has_staff_role(array['owner', 'manager']));
 
 do $$
 declare
@@ -179,24 +183,24 @@ begin
     if to_regclass('public.' || t) is null then continue; end if;
     execute format('create policy %I on public.%I for select using (true)', t || '_read', t);
     execute format(
-      'create policy %I on public.%I for all using (public.is_staff(array[''owner'', ''manager''])) with check (public.is_staff(array[''owner'', ''manager'']))',
+      'create policy %I on public.%I for all using (public.has_staff_role(array[''owner'', ''manager''])) with check (public.has_staff_role(array[''owner'', ''manager'']))',
       t || '_write', t);
   end loop;
 
   if to_regclass('public.posts') is not null then
     create policy posts_read on public.posts for select
-      using (status::text = 'published' or public.is_staff());
+      using (status::text = 'published' or public.has_staff_role(array['owner', 'manager', 'support']));
     create policy posts_write on public.posts for all
-      using (public.is_staff(array['owner', 'manager']))
-      with check (public.is_staff(array['owner', 'manager']));
+      using (public.has_staff_role(array['owner', 'manager']))
+      with check (public.has_staff_role(array['owner', 'manager']));
   end if;
 
   -- Staff-only data: support may read, owner/manager may write.
   foreach t in array array['customers', 'orders', 'order_items', 'studio_designs', 'discounts', 'social_posts'] loop
     if to_regclass('public.' || t) is null then continue; end if;
-    execute format('create policy %I on public.%I for select using (public.is_staff())', t || '_staff_read', t);
+    execute format('create policy %I on public.%I for select using (public.has_staff_role(array[''owner'', ''manager'', ''support'']))', t || '_staff_read', t);
     execute format(
-      'create policy %I on public.%I for all using (public.is_staff(array[''owner'', ''manager''])) with check (public.is_staff(array[''owner'', ''manager'']))',
+      'create policy %I on public.%I for all using (public.has_staff_role(array[''owner'', ''manager''])) with check (public.has_staff_role(array[''owner'', ''manager'']))',
       t || '_staff_write', t);
   end loop;
 end
@@ -204,9 +208,9 @@ $$;
 
 -- Audit log: append-only for staff, readable by owner/manager, never updated or deleted.
 create policy audit_log_read on public.audit_log for select
-  using (public.is_staff(array['owner', 'manager']));
+  using (public.has_staff_role(array['owner', 'manager']));
 create policy audit_log_append on public.audit_log for insert
-  with check (public.is_staff() and actor_id = auth.uid());
+  with check (public.has_staff_role(array['owner', 'manager', 'support']) and actor_id = auth.uid());
 revoke update, delete, truncate on public.audit_log from anon, authenticated;
 
 -- Keep the promo code that used to be hard-coded in the checkout.
