@@ -4,12 +4,19 @@ on:
   pull_request:
   push:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
 
+# A new push to the same branch cancels the run that is still in progress.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   check:
+    name: Typecheck, test and build
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
@@ -19,16 +26,26 @@ jobs:
       NEXT_TELEMETRY_DISABLED: '1'
     steps:
       - uses: actions/checkout@v4
+
+      - name: Set up pnpm (version from packageManager)
+        uses: pnpm/action-setup@v4
+
       - uses: actions/setup-node@v4
         with:
-          node-version: 24
-      - name: Enable corepack (pnpm from packageManager)
-        run: corepack enable
+          node-version-file: .nvmrc
+          cache: pnpm
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Audit production dependencies
+        run: pnpm audit --prod --audit-level high
+
       - name: Typecheck
         run: pnpm typecheck
+
       - name: Unit tests
         run: pnpm test
+
       - name: Build
         run: pnpm build
