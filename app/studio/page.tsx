@@ -37,10 +37,11 @@ export default function StudioPage() {
   const [tab, setTab] = useState<EditorTab>('artwork')
   const [uploading, setUploading] = useState(false)
   const [message, setMessage] = useState('Draft saved on this device')
+  const [needsSignIn, setNeedsSignIn] = useState(false)
   const total = sizePrices[state.size] + frameAddons[state.frame] + paperAddons[state.paper]
   const quality = useMemo(() => {
     const dimensions: Record<string, [number, number]> = {
-      A4: [8.27, 11.7], A3: [11.69, 16.5], '30×40': [11.8, 15.7], '50×70': [19.7, 27.5], '70Ã—100': [27.5, 39.3],
+      A4: [8.27, 11.7], A3: [11.69, 16.5], '30×40': [11.8, 15.7], '50×70': [19.7, 27.5], '70×100': [27.5, 39.3],
     }
     const [w, h] = dimensions[state.size] || dimensions.A3
     const dpi = Math.min(state.imageWidth / w, state.imageHeight / h)
@@ -86,10 +87,13 @@ export default function StudioPage() {
     image.onload = () => patch({ image: localUrl, imageWidth: image.naturalWidth, imageHeight: image.naturalHeight }); image.src = localUrl
     const form = new FormData(); form.append('file', file)
     try {
-      const response = await fetch('/api/studio/upload', { method: 'POST', body: form }); const result = await response.json()
+      const response = await fetch('/api/studio/upload', { method: 'POST', body: form }); const result = await response.json().catch(() => ({}))
+      if (response.status === 401) { setNeedsSignIn(true); patch({ artworkPath: '' }); setMessage('Sign in to upload your image and order this print'); return }
       if (!response.ok) throw new Error(result.error || 'Upload failed')
-      patch({ image: result.url, imageWidth: image.naturalWidth, imageHeight: image.naturalHeight }); URL.revokeObjectURL(localUrl); setMessage('Image uploaded')
-    } catch (error) { setMessage(error instanceof Error ? error.message : 'Image kept in this browser only') }
+      const previewUrl = result.url || `/api/studio/artwork?path=${encodeURIComponent(result.pathname)}`
+      setNeedsSignIn(false)
+      patch({ image: previewUrl, artworkPath: result.pathname, imageWidth: image.naturalWidth, imageHeight: image.naturalHeight }); URL.revokeObjectURL(localUrl); setMessage('Image uploaded')
+    } catch (error) { patch({ artworkPath: '' }); setMessage(error instanceof Error ? error.message : 'Upload failed. Please try again') }
     finally { setUploading(false); event.target.value = '' }
   }
   function beginPan(event: React.PointerEvent<HTMLDivElement>) {
@@ -106,7 +110,9 @@ export default function StudioPage() {
     const savedAt = new Date().toISOString(); set({ savedAt }); localStorage.setItem('oneposters-studio-saved', savedAt); setMessage('Draft saved on this device')
   }
   function addToBag() {
-    addToCart({ id: `custom-${Date.now()}`, title: state.title.trim() || 'Custom poster', image: state.image, price: total, category: 'Custom', custom: { size: state.size, frame: state.frame, paper: state.paper, mockup: state.image } })
+    if (!state.artworkPath) { setMessage(needsSignIn ? 'Sign in and upload your image to order this print' : 'Upload your own image to order a custom print'); return }
+    const { set: _set, reset: _reset, image: _image, artworkPath, savedAt: _savedAt, size, frame, paper, ...settings } = useStudioStore.getState()
+    addToCart({ id: `custom-${Date.now()}`, title: state.title.trim() || 'Custom poster', image: state.image, price: total, category: 'Custom', custom: { size, frame, paper, mockup: state.image, artworkPath, settings } })
   }
 
   return <main className={styles.studio}>
@@ -136,7 +142,7 @@ export default function StudioPage() {
             <div className={styles.stageShadow} />
             <span className={`${styles.corner} ${styles.cornerTopLeft}`} /><span className={`${styles.corner} ${styles.cornerTopRight}`} /><span className={`${styles.corner} ${styles.cornerBottomLeft}`} /><span className={`${styles.corner} ${styles.cornerBottomRight}`} />
           </div>
-          <div className={styles.canvasFooter}><div><span className={styles.qualityDot} data-level={quality.level} /><div><strong>{quality.label}</strong><span>{quality.detail}</span></div></div><span>{state.size.replace('Ã—', '×')} · {state.frame === 'none' ? 'Unframed' : `${state.frame} frame`} · {state.paper}</span></div>
+          <div className={styles.canvasFooter}><div><span className={styles.qualityDot} data-level={quality.level} /><div><strong>{quality.label}</strong><span>{quality.detail}</span></div></div><span>{state.size} · {state.frame === 'none' ? 'Unframed' : `${state.frame} frame`} · {state.paper}</span></div>
           <div className={styles.canvasTools}><div className={styles.toolGroup}><button onClick={() => patch({ zoom: Math.max(80, state.zoom - 10) })} aria-label="Zoom out"><Minus size={15} /></button><input type="range" min="80" max="180" value={state.zoom} onChange={event => patch({ zoom: Number(event.target.value) })} aria-label="Artwork zoom"/><button onClick={() => patch({ zoom: Math.min(180, state.zoom + 10) })} aria-label="Zoom in"><Plus size={15} /></button><span>{state.zoom}%</span></div>
             <span className={styles.toolDivider} /><button className={styles.fitButton} onClick={() => patch({ fit: state.fit === 'fill' ? 'fit' : 'fill', offsetX: 0, offsetY: 0 })}>{state.fit === 'fill' ? 'Fill' : 'Fit'} image</button><button className={styles.fitButton} onClick={() => patch({ rotate: (state.rotate + 90) % 360 })}><RotateCw size={14} /> Rotate</button>
           </div>
@@ -148,12 +154,13 @@ export default function StudioPage() {
             {tab === 'artwork' && <>
               <section className={styles.controlSection}><div className={styles.sectionTitle}><div><h3>Your image</h3><p>Start with a photo or artwork.</p></div></div>
                 <button className={styles.uploadCard} onClick={() => fileRef.current?.click()} disabled={uploading}><span className={styles.uploadIcon}><Upload size={18} /></span><span><strong>{uploading ? 'Uploading image…' : 'Upload an image'}</strong><small>JPG, PNG, WebP or AVIF · up to 10 MB</small></span><Plus size={17} /></button><input ref={fileRef} className={styles.fileInput} type="file" accept="image/jpeg,image/png,image/webp,image/avif" onChange={upload} />
-                <button className={styles.demoLink} onClick={() => patch({ image: demo, imageWidth: 1200, imageHeight: 1200 })}>Try the sample artwork <ArrowLeft size={13} /></button>
+                {needsSignIn && <p className={styles.demoLink}><a href="/auth/login?next=/studio">Sign in</a> or <a href="/auth/sign-up">create an account</a> to upload your image.</p>}
+                <button className={styles.demoLink} onClick={() => patch({ image: demo, artworkPath: '', imageWidth: 1200, imageHeight: 1200 })}>Try the sample artwork <ArrowLeft size={13} /></button>
               </section>
               <section className={styles.controlSection}><div className={styles.sectionTitle}><div><h3>Image treatment</h3><p>Set a mood with one tap.</p></div></div><div className={styles.filterGrid}>{filters.map((filter, index) => <button key={filter.id} className={state.filter === filter.id ? styles.filterActive : ''} onClick={() => patch({ filter: filter.id })}><span className={`${styles.filterSwatch} ${styles[`swatch${index}`]}`} /><span>{filter.label}</span></button>)}</div></section>
             </>}
             {tab === 'layout' && <>
-              <section className={styles.controlSection}><div className={styles.sectionTitle}><div><h3>Print size</h3><p>Every size is printed to order.</p></div></div><div className={styles.sizeList}>{sizes.map(value => <button key={value} className={state.size === value ? styles.sizeActive : ''} onClick={() => patch({ size: value })}><span className={styles.sizeIcon} data-size={value === 'A4' ? 'small' : value === 'A3' ? 'medium' : 'large'} /><span><strong>{value.replace('Ã—', '×')}</strong><small>{value === 'A4' ? '21 × 29.7 cm' : value === 'A3' ? '29.7 × 42 cm' : value.startsWith('30') && value.endsWith('40') ? '30 × 40 cm' : value.startsWith('50') && value.endsWith('70') ? '50 × 70 cm' : '70 × 100 cm'}</small></span><strong className={styles.sizePrice}>€{sizePrices[value]}</strong><span className={styles.radio} /></button>)}</div></section>
+              <section className={styles.controlSection}><div className={styles.sectionTitle}><div><h3>Print size</h3><p>Every size is printed to order.</p></div></div><div className={styles.sizeList}>{sizes.map(value => <button key={value} className={state.size === value ? styles.sizeActive : ''} onClick={() => patch({ size: value })}><span className={styles.sizeIcon} data-size={value === 'A4' ? 'small' : value === 'A3' ? 'medium' : 'large'} /><span><strong>{value}</strong><small>{value === 'A4' ? '21 × 29.7 cm' : value === 'A3' ? '29.7 × 42 cm' : value.startsWith('30') && value.endsWith('40') ? '30 × 40 cm' : value.startsWith('50') && value.endsWith('70') ? '50 × 70 cm' : '70 × 100 cm'}</small></span><strong className={styles.sizePrice}>€{sizePrices[value]}</strong><span className={styles.radio} /></button>)}</div></section>
               <section className={styles.controlSection}><div className={styles.sectionTitle}><div><h3>Image placement</h3><p>Choose how your image fills the print.</p></div></div><div className={styles.segment}><button className={state.fit === 'fill' ? styles.segmentActive : ''} onClick={() => patch({ fit: 'fill' })}>Fill the print</button><button className={state.fit === 'fit' ? styles.segmentActive : ''} onClick={() => patch({ fit: 'fit' })}>Show all</button></div><label className={styles.rangeLabel}>White border <span>{state.border}px</span></label><input className={styles.range} type="range" min="0" max="32" value={state.border} onChange={event => patch({ border: Number(event.target.value) })} /></section>
             </>}
             {tab === 'finish' && <>
@@ -162,7 +169,7 @@ export default function StudioPage() {
             </>}
           </div>
           <section className={styles.titleSection}><div className={styles.titleToggle}><span className={styles.titleIcon}><Type size={16} /></span><div><strong>Poster text</strong><small>Add a title to your artwork</small></div><button className={`${styles.switch} ${state.showText ? styles.switchOn : ''}`} role="switch" aria-checked={state.showText} aria-label="Show poster text" onClick={() => patch({ showText: !state.showText })}><span /></button></div>{state.showText && <><input className={styles.titleInput} value={state.title} maxLength={60} onChange={event => patch({ title: event.target.value })} aria-label="Poster title" placeholder="Add your title"/><div className={styles.titleOptions}><select value={state.titleFont} onChange={event => patch({ titleFont: event.target.value })} aria-label="Title font"><option>Arial</option><option>Georgia</option><option>Courier New</option></select><input type="color" value={state.titleColor} onChange={event => patch({ titleColor: event.target.value })} aria-label="Title colour"/><label><span>Size</span><input type="range" min="18" max="100" value={state.titleSize} onChange={event => patch({ titleSize: Number(event.target.value) })} aria-label="Title size"/></label></div><div className={styles.titlePosition}><span>Position</span><label>X<input type="range" min="10" max="90" value={state.titleX} onChange={event => patch({ titleX: Number(event.target.value) })}/></label><label>Y<input type="range" min="10" max="90" value={state.titleY} onChange={event => patch({ titleY: Number(event.target.value) })}/></label></div></>}</section>
-          <div className={styles.panelBottom}><div className={styles.total}><span>Total <i>incl. VAT</i></span><strong>€{total.toFixed(2)}</strong></div><button className={styles.addButton} onClick={addToBag}>Add custom print to bag <Plus size={17} /></button><p><Check size={13} /> Made to order · Secure checkout</p></div>
+          <div className={styles.panelBottom}><div className={styles.total}><span>Total <i>incl. VAT</i></span><strong>€{total.toFixed(2)}</strong></div><button className={styles.addButton} onClick={addToBag} disabled={uploading}>Add custom print to bag <Plus size={17} /></button>{!state.artworkPath && <p>Upload your own image to order this print.</p>}<p><Check size={13} /> Made to order · Secure checkout</p></div>
         </aside>
       </div>
       <footer className={styles.footer}><span>Thoughtfully made, just for you.</span><Link href="/shipping-returns">Print & delivery details <ArrowLeft size={13} /></Link></footer>

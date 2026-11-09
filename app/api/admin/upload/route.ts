@@ -1,51 +1,49 @@
 import { put } from '@vercel/blob'
 import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
 import { isAllowedRasterImage } from '@/lib/upload-validation'
+import { ALLOWED_IMAGE_TYPES, MAX_IMAGE_BYTES, safeFileName } from '@/lib/blob'
+import { crossOriginResponse, isSameOrigin } from '@/lib/security'
+import { EDITOR_ROLES, requireStaffApi } from '@/lib/staff'
 
-const MAX_BYTES = 10 * 1024 * 1024
-const ALLOWED = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/avif'])
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
+/** Uploads a product image and appends it to the product's gallery. */
 export async function POST(request: Request) {
-  if (Number(request.headers.get('content-length') || 0) > MAX_BYTES + 64 * 1024) return NextResponse.json({ error: 'Upload request is too large' }, { status: 413 })
-  const supabase = await createClient()
-
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
-  if (!profile || !['owner', 'manager'].includes(profile.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if (!isSameOrigin(request)) return crossOriginResponse()
+  if (Number(request.headers.get('content-length') || 0) > MAX_IMAGE_BYTES + 64 * 1024) return NextResponse.json({ error: 'Upload request is too large' }, { status: 413 })
+  const auth = await requireStaffApi(EDITOR_ROLES)
+  if (!auth.ok) return auth.response
+  const { supabase, profile } = auth
 
   let form: FormData
   try { form = await request.formData() } catch { return NextResponse.json({ error: 'Invalid upload form' }, { status: 400 }) }
   const file = form.get('file')
+  const productId = form.get('productId')
+  if (typeof productId !== 'string' || !UUID.test(productId)) return NextResponse.json({ error: 'Save the product before adding images' }, { status: 400 })
   if (!(file instanceof File)) return NextResponse.json({ error: 'Image file is required' }, { status: 400 })
-  if (!ALLOWED.has(file.type)) return NextResponse.json({ error: 'Use JPG, PNG, WebP, or AVIF' }, { status: 400 })
+  if (!ALLOWED_IMAGE_TYPES.has(file.type)) return NextResponse.json({ error: 'Use JPG, PNG, WebP, or AVIF' }, { status: 400 })
   if (file.size === 0) return NextResponse.json({ error: 'Image file is empty' }, { status: 400 })
-  if (file.size > MAX_BYTES) return NextResponse.json({ error: 'Image must be smaller than 10MB' }, { status: 400 })
+  if (file.size > MAX_IMAGE_BYTES) return NextResponse.json({ error: 'Image must be smaller than 10MB' }, { status: 400 })
   if (!(await isAllowedRasterImage(file))) return NextResponse.json({ error: 'Image content does not match its file type' }, { status: 400 })
 
-  const suppliedProductId = form.get('productId')
-  if (typeof suppliedProductId === 'string' && suppliedProductId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(suppliedProductId)) return NextResponse.json({ error: 'Invalid product ID' }, { status: 400 })
-  const productId = typeof suppliedProductId === 'string' && suppliedProductId ? suppliedProductId : crypto.randomUUID()
-  const safeName = file.name.toLowerCase().replace(/[^a-z0-9.]+/g, '-').replace(/(^-|-$)/g, '') || 'image'
-  const path = `${productId}/${crypto.randomUUID()}-${safeName}`
+  const { data: product } = await supabase.from('products').select('id').eq('id', productId).maybeSingle()
+  if (!product) return NextResponse.json({ error: 'Product not found' }, { status: 404 })
+
   let blob
   try {
-    blob = await put(`products/${path}`, file, { access: 'public', addRandomSuffix: false, contentType: file.type })
+    blob = await put(`products/${productId}/${crypto.randomUUID()}-${safeFileName(file.name)}`, file, { access: 'public', addRandomSuffix: false, contentType: file.type })
   } catch (error) {
-    console.error('[v0] Product Blob upload failed:', error)
-    return NextResponse.json({ error: 'Upload failed' }, { status: 400 })
+    console.error('[oneposters] Product image upload failed:', error)
+    return NextResponse.json({ error: 'Upload failed' }, { status: 502 })
   }
 
-  if (suppliedProductId) {
-    const { data: existingImages, error: lookupError } = await supabase.from('product_images').select('id').eq('product_id', productId).order('sort_order', { ascending: true }).limit(1)
-    if (lookupError) return NextResponse.json({ error: 'Image uploaded but could not update the product image' }, { status: 400 })
-    const image = { url: blob.url, alt: String(form.get('alt') || '').trim().slice(0, 500) }
-    const result = existingImages?.length
-      ? await supabase.from('product_images').update(image).eq('id', existingImages[0].id)
-      : await supabase.from('product_images').insert({ ...image, product_id: productId, sort_order: 0 })
-    if (result.error) return NextResponse.json({ error: 'Image uploaded but could not attach it to the product' }, { status: 400 })
-  }
-  return NextResponse.json({ url: blob.url, path: blob.pathname })
+  const { data: last } = await supabase.from('product_images').select('sort_order').eq('product_id', productId).order('sort_order', { ascending: false }).limit(1)
+  const sortOrder = (last?.[0]?.sort_order ?? -1) + 1
+  const alt = String(form.get('alt') || '').trim().slice(0, 500)
+  const { data: image, error } = await supabase.from('product_images').insert({ product_id: productId, url: blob.url, alt, sort_order: sortOrder }).select().single()
+  if (error) return NextResponse.json({ error: 'Image uploaded but could not be attached to the product' }, { status: 400 })
+
+  const { error: auditError } = await supabase.from('audit_log').insert({ actor_id: profile.id, action: 'create', entity_type: 'product_images', entity_id: image.id, after: image })
+  if (auditError) console.error('[oneposters] Audit log write failed:', auditError.message)
+  return NextResponse.json({ data: image }, { status: 201 })
 }
-
