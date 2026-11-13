@@ -7,7 +7,7 @@ import { ArrowLeft, ArrowRight, Check, Heart, Image as ImageIcon, ShieldCheck, T
 import { notFound } from 'next/navigation'
 import { getProduct, products, type Product } from '@/data/products'
 import { useCartStore } from '@/lib/cart-store'
-import { fetchPublishedProduct } from '@/lib/catalog'
+import { fetchPublishedProduct, fetchPublishedProducts, toStoreProduct } from '@/lib/catalog'
 import { Header, ProductCard, SearchPalette } from '@/components/store'
 import { RecentlyViewed } from '@/components/recently-viewed'
 import { trackRecentlyViewed } from '@/lib/recently-viewed'
@@ -25,6 +25,8 @@ export default function ProductPage({ params }: { params: Promise<{ slug: string
   const { slug } = use(params)
   const { data: remoteProduct, isLoading, error } = useSWR(['published-product', slug], () => fetchPublishedProduct(slug))
   const fallback = getProduct(slug)
+  // Same cache key as the shop, so this is usually already loaded.
+  const { data: liveCatalog } = useSWR('published-products', fetchPublishedProducts, { revalidateOnFocus: false })
   const product = (remoteProduct ?? ((isLoading || error) ? fallback : undefined)) as ProductRecord | undefined
   const addToCart = useCartStore(state => state.add)
   const [size, setSize] = useState('A3')
@@ -44,10 +46,13 @@ export default function ProductPage({ params }: { params: Promise<{ slug: string
     return (product?.sizes || []).map(label => ({ label, dimensions: dimensions[label] || label, price: (product?.price || 32) + (sizeAddons[label] || 0) }))
   }, [product])
   const activeSize = sizeOptions.find(option => option.label === size) || sizeOptions[0]
+  // A product loaded from the database without any sizes cannot be priced or ordered.
+  const unavailable = Boolean(remoteProduct) && sizeOptions.length === 0
   const activeFrame = frames.find(option => option.value === frame) || frames[0]
   const price = (activeSize?.price ?? product?.price ?? 32) + activeFrame.price
   const images = product ? (product.product_images?.length ? product.product_images.map(image => ({ src: image.url, alt: image.alt || product.title })) : [{ src: product.image, alt: product.title }]) : []
-  const related = products.filter(item => item.category === product?.category && item.slug !== slug).slice(0, 4)
+  const relatedSource: Product[] = liveCatalog !== undefined ? liveCatalog.map(toStoreProduct) : products
+  const related = relatedSource.filter(item => item.category === product?.category && item.slug !== slug).slice(0, 4)
 
   useEffect(() => {
     if (!product) return
@@ -68,6 +73,7 @@ export default function ProductPage({ params }: { params: Promise<{ slug: string
     } catch {}
   }
   function add() {
+    if (unavailable) return
     addToCart({ id: `${slug}-${activeSize?.label || size}-${frame}`, productId: product!.id, title: product!.title, image: images[galleryIndex]?.src || product!.image, price, category: product!.category, custom: { size: activeSize?.label || size, frame, paper: 'matte' } })
   }
 
@@ -85,11 +91,11 @@ export default function ProductPage({ params }: { params: Promise<{ slug: string
         <div className={styles.titleBlock}><span className={styles.eyebrow}>{product.category} <i>·</i> ONEPOSTERS EDITION</span><div className={styles.titleRow}><h1>{product.title}</h1><button className={`${styles.wishlist} ${liked ? styles.wishlisted : ''}`} onClick={toggleWishlist} aria-label={liked ? 'Remove from wishlist' : 'Save to wishlist'}><Heart size={18} fill={liked ? 'currentColor' : 'none'} /></button></div><p>{product.description}</p></div>
         <div className={styles.priceLine}><strong>€{price.toFixed(2)}</strong><span>Shipping calculated at checkout</span></div>
 
-        <section className={styles.optionBlock}><div className={styles.optionHeading}><h2>Choose your size</h2><button onClick={() => setOpenFaq(openFaq === 'size' ? null : 'size')}>Size guide <ArrowRight size={12} /></button></div><div className={styles.sizeChoices}>{sizeOptions.map(option => <button key={option.label} className={activeSize?.label === option.label ? styles.sizeSelected : ''} onClick={() => setSize(option.label)}><span className={styles.sizeName}>{option.label}</span><span className={styles.sizeDimensions}>{option.dimensions}</span><span className={styles.sizePrice}>€{option.price.toFixed(2)}</span></button>)}</div>{openFaq === 'size' && <p className={styles.sizeHelp}>All measurements refer to the finished print. Choose a size that leaves room for a frame or mat if you plan to add one.</p>}</section>
+        <section className={styles.optionBlock}><div className={styles.optionHeading}><h2>Choose your size</h2><button onClick={() => setOpenFaq(openFaq === 'size' ? null : 'size')}>Size guide <ArrowRight size={12} /></button></div>{unavailable && <p className={styles.sizeHelp}>This print isn't available to order right now. Please check back soon.</p>}<div className={styles.sizeChoices}>{sizeOptions.map(option => <button key={option.label} className={activeSize?.label === option.label ? styles.sizeSelected : ''} onClick={() => setSize(option.label)}><span className={styles.sizeName}>{option.label}</span><span className={styles.sizeDimensions}>{option.dimensions}</span><span className={styles.sizePrice}>€{option.price.toFixed(2)}</span></button>)}</div>{openFaq === 'size' && <p className={styles.sizeHelp}>All measurements refer to the finished print. Choose a size that leaves room for a frame or mat if you plan to add one.</p>}</section>
 
         <section className={styles.optionBlock}><div className={styles.optionHeading}><h2>Frame</h2><span className={styles.quietLabel}>Optional</span></div><div className={styles.frameChoices}>{frames.map(option => <button key={option.value} className={frame === option.value ? styles.frameSelected : ''} onClick={() => setFrame(option.value)}><span className={`${styles.frameSample} ${styles[`frame_${option.value}`]}`}><i /></span><span>{option.name}</span><small>{option.price ? `+€${option.price}` : 'Print only'}</small></button>)}</div></section>
 
-        <div className={styles.actionRow}><button className={styles.addButton} onClick={add}>Add to bag <span>€{price.toFixed(2)}</span><ArrowRight size={16} /></button></div>
+        <div className={styles.actionRow}><button className={styles.addButton} onClick={add} disabled={unavailable}>{unavailable ? 'Currently unavailable' : <>Add to bag <span>€{price.toFixed(2)}</span><ArrowRight size={16} /></>}</button></div>
         <div className={styles.promise}><span><Truck size={15} /> Ships in 2–4 working days</span><span><ShieldCheck size={15} /> Secure checkout</span></div>
 
         <div className={styles.details}>
@@ -103,7 +109,7 @@ export default function ProductPage({ params }: { params: Promise<{ slug: string
 
     {related.length > 0 && <section className={styles.related}><div className={styles.relatedHeading}><div><span className={styles.eyebrow}>KEEP LOOKING</span><h2>Works well <em>with.</em></h2></div><Link href="/shop">All prints <ArrowRight size={14} /></Link></div><div className={styles.relatedGrid}>{related.map(item => <ProductCard key={item.slug} product={item} layoutId={false} />)}</div></section>}
     <RecentlyViewed excludeSlug={slug} />
-    <div className={styles.mobileBuy}><div><span>Total</span><strong>€{price.toFixed(2)}</strong></div><button onClick={add}>Add to bag <ArrowRight size={15} /></button></div>
+    <div className={styles.mobileBuy}><div><span>Total</span><strong>€{price.toFixed(2)}</strong></div><button onClick={add} disabled={unavailable}>{unavailable ? 'Unavailable' : <>Add to bag <ArrowRight size={15} /></>}</button></div>
     <SearchPalette open={searchOpen} close={() => setSearchOpen(false)} />
   </main>
 }

@@ -14,6 +14,8 @@ export type CatalogProduct = {
   colors?: string[]
   sizes?: string[]
   orientation?: Product['orientation']
+  /** False when the product has no sizes in the database, so it cannot be ordered. */
+  orderable?: boolean
 }
 
 export function toStoreProduct(product: CatalogProduct): Product & { id?: string } {
@@ -22,6 +24,7 @@ export function toStoreProduct(product: CatalogProduct): Product & { id?: string
     category: product.category || 'Art', price: product.price ?? 32,
     image: product.image || '/images/admin-poster-placeholder.png',
     colors: product.colors || [], sizes: product.sizes || [], orientation: product.orientation || 'Portrait',
+    orderable: product.orderable ?? true,
   }
 }
 
@@ -60,7 +63,8 @@ export async function fetchPublishedProducts(): Promise<CatalogProduct[]> {
       image: product.product_images?.sort((a: any, b: any) => a.sort_order - b.sort_order)[0]?.url || fallback?.image || '/images/admin-poster-placeholder.png',
       category: product.categories?.name ?? 'Art',
       price: fromPrice(product.product_sizes),
-      sizes: sizeLabels.length ? sizeLabels : fallback?.sizes ?? [],
+      sizes: sizeLabels,
+      orderable: sizeLabels.length > 0,
       colors: fallback?.colors ?? [], orientation: fallback?.orientation ?? 'Portrait',
     } as CatalogProduct
   })
