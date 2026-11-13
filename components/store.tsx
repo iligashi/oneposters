@@ -30,7 +30,9 @@ export function ProductCard({ product, layoutId = true }: { product: Product; la
       </Link>
       <span className={catalogStyles.edition}>ONE / PRINT</span>
       <button className={`${catalogStyles.heart} ${liked ? catalogStyles.hearted : ''}`} onClick={toggle} aria-label={`${liked ? 'Remove' : 'Add'} ${product.title} ${liked ? 'from' : 'to'} wishlist`}><Heart size={16} fill={liked ? 'currentColor' : 'none'} /></button>
-      <button className={catalogStyles.quickAdd} onClick={() => add({ id: product.slug, productId: (product as Product & { id?: string }).id, title: product.title, image: product.image, price: product.price, category: product.category })}><span>Add to bag</span><ArrowRight size={15} /></button>
+      {product.orderable === false
+        ? <Link className={catalogStyles.quickAdd} href={`/product/${product.slug}`} aria-label={`${product.title} is currently unavailable`}><span>Currently unavailable</span><ArrowRight size={15} /></Link>
+        : <button className={catalogStyles.quickAdd} onClick={() => add({ id: product.slug, productId: (product as Product & { id?: string }).id, title: product.title, image: product.image, price: product.price, category: product.category })}><span>Add to bag</span><ArrowRight size={15} /></button>}
     </div>
     <Link href={`/product/${product.slug}`} className={catalogStyles.details}>
       <span className={catalogStyles.category}>{product.category}</span><h3>{product.title}</h3>
