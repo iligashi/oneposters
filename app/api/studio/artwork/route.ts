@@ -1,6 +1,5 @@
-import { get } from '@vercel/blob'
 import { NextResponse } from 'next/server'
-import { studioBlobAccess } from '@/lib/blob'
+import { getStudioArtwork } from '@/lib/blob'
 import { isArtworkOwnedBy, isStudioArtworkPath } from '@/lib/orders'
 import { checkStaff } from '@/lib/staff'
 
@@ -17,8 +16,8 @@ export async function GET(request: Request) {
   }
 
   try {
-    const blob = await get(path, { access: studioBlobAccess() })
-    if (!blob || blob.statusCode !== 200) return NextResponse.json({ error: 'Artwork not found' }, { status: 404 })
+    const blob = await getStudioArtwork(path)
+    if (!blob) return NextResponse.json({ error: 'Artwork not found' }, { status: 404 })
     const download = new URL(request.url).searchParams.get('download') === '1'
     return new Response(blob.stream, {
       headers: {

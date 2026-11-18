@@ -21,11 +21,50 @@ export function clientIp(request: Request): string {
 type Bucket = { count: number; resetAt: number }
 const buckets = new Map<string, Bucket>()
 
+export type RateLimitResult = { ok: boolean; remaining: number; retryAfterSeconds: number }
+
+/** Shared counter store; returns null when it is unavailable. */
+export type RateLimitStore = (key: string, limit: number, windowSeconds: number) => Promise<RateLimitResult | null>
+
+/** Postgres-backed store (public.rate_limit_hit), shared by every server instance. */
+export const supabaseRateLimitStore: RateLimitStore = async (key, limit, windowSeconds) => {
+  try {
+    const { createAdminClient } = await import('./supabase/admin')
+    const { data, error } = await createAdminClient().rpc('rate_limit_hit', {
+      p_key: key,
+      p_limit: limit,
+      p_window_seconds: windowSeconds,
+    })
+    const row = Array.isArray(data) ? data[0] : data
+    if (error || !row) {
+      if (error) console.error('[oneposters] Shared rate limit unavailable:', error.message)
+      return null
+    }
+    return { ok: row.allowed === true, remaining: Number(row.remaining), retryAfterSeconds: Number(row.retry_after_seconds) }
+  } catch (error) {
+    console.error('[oneposters] Shared rate limit unavailable:', error)
+    return null
+  }
+}
+
+/**
+ * Rate limit shared across serverless instances. If the shared store is down
+ * it degrades to the per-instance in-memory limiter rather than failing open.
+ * Both counters are updated, so a store outage cannot reset a client's budget.
+ */
+export async function rateLimit(key: string, limit: number, windowMs: number, store: RateLimitStore = supabaseRateLimitStore): Promise<RateLimitResult> {
+  const local = rateLimitLocal(key, limit, windowMs)
+  const shared = await store(key, limit, Math.max(1, Math.ceil(windowMs / 1000)))
+  if (!shared) return local
+  if (!local.ok && shared.ok) return local
+  return shared
+}
+
 /**
  * Fixed-window rate limiter kept in memory per server instance. It stops bursts
- * from a single client; it is not a global limit across serverless instances.
+ * from a single client; on its own it is not a global limit across instances.
  */
-export function rateLimit(key: string, limit: number, windowMs: number, now = Date.now()) {
+export function rateLimitLocal(key: string, limit: number, windowMs: number, now = Date.now()): RateLimitResult {
   const bucket = buckets.get(key)
   if (!bucket || bucket.resetAt <= now) {
     buckets.set(key, { count: 1, resetAt: now + windowMs })

@@ -35,7 +35,7 @@ class OrderInputError extends Error {}
 export async function POST(request: Request) {
   if (!isSameOrigin(request)) return crossOriginResponse()
   const ip = clientIp(request)
-  const limited = rateLimit(`orders:${ip}`, 5, 10 * 60 * 1000)
+  const limited = await rateLimit(`orders:${ip}`, 5, 10 * 60 * 1000)
   if (!limited.ok) return rateLimitResponse(limited.retryAfterSeconds)
 
   if (Number(request.headers.get('content-length') || 0) > 64 * 1024) return NextResponse.json({ error: 'Request is too large' }, { status: 413 })
