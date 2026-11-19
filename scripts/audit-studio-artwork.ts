@@ -11,6 +11,9 @@
  * and review the report before migrating. After migrating, any public URL
  * that is still reachable (e.g. cached at the CDN) is reported as
  * "still-public" so it can be followed up.
+ *
+ * Once a run reports "Still public: 0", set STUDIO_ARTWORK_PUBLIC_FALLBACK=off
+ * so /api/studio/artwork stops reading public blobs altogether.
  */
 import { writeFileSync } from 'node:fs'
 import { get, list, put } from '@vercel/blob'
