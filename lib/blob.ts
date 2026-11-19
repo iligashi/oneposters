@@ -1,10 +1,34 @@
+import { get } from '@vercel/blob'
+
+export type BlobAccess = 'public' | 'private'
+
 /**
- * Access mode for customer studio uploads. Set STUDIO_BLOB_ACCESS=private once the
- * project's Blob store supports private blobs; artwork is then only readable
- * through /api/studio/artwork by its owner or staff.
+ * Access mode for new customer studio uploads. Customer artwork is private by
+ * default: it is only readable through /api/studio/artwork by its owner or
+ * staff, never through a guessable public URL. STUDIO_BLOB_ACCESS=public is an
+ * explicit opt-out for stores that cannot hold private blobs.
  */
-export function studioBlobAccess(): 'public' | 'private' {
-  return process.env.STUDIO_BLOB_ACCESS === 'private' ? 'private' : 'public'
+export function studioBlobAccess(): BlobAccess {
+  return process.env.STUDIO_BLOB_ACCESS === 'public' ? 'public' : 'private'
+}
+
+/**
+ * Reads a studio artwork blob. Files uploaded before the private default was
+ * introduced are public blobs, so fall back to the other access mode when the
+ * configured one does not find the file.
+ */
+export async function getStudioArtwork(pathname: string, fetchBlob: typeof get = get) {
+  const primary = studioBlobAccess()
+  const fallback: BlobAccess = primary === 'private' ? 'public' : 'private'
+  for (const access of [primary, fallback]) {
+    try {
+      const blob = await fetchBlob(pathname, { access })
+      if (blob && blob.statusCode === 200) return blob
+    } catch {
+      // try the other access mode
+    }
+  }
+  return null
 }
 
 export const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/avif'])

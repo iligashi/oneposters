@@ -6,7 +6,7 @@ import { clientIp, crossOriginResponse, isSameOrigin, rateLimit, rateLimitRespon
 /** Checks a promo code for the cart. The order API re-checks it when the order is placed. */
 export async function POST(request: Request) {
   if (!isSameOrigin(request)) return crossOriginResponse()
-  const limited = rateLimit(`promo:${clientIp(request)}`, 10, 10 * 60 * 1000)
+  const limited = await rateLimit(`promo:${clientIp(request)}`, 10, 10 * 60 * 1000)
   if (!limited.ok) return rateLimitResponse(limited.retryAfterSeconds)
 
   let body: Record<string, unknown>

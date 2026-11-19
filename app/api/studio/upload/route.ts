@@ -12,7 +12,7 @@ export async function POST(request: Request) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Sign in to upload an image.', signIn: true }, { status: 401 })
 
-  const limited = rateLimit(`studio-upload:${user.id}`, 20, 60 * 60 * 1000)
+  const limited = await rateLimit(`studio-upload:${user.id}`, 20, 60 * 60 * 1000)
   if (!limited.ok) return rateLimitResponse(limited.retryAfterSeconds)
 
   let form: FormData

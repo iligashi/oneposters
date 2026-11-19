@@ -42,6 +42,13 @@ Commit `supabase/schema.sql`. Future changes should be new files in
 - Orders are written only by `create_order()`, which runs in one transaction and
   can only be called with the service-role key (the `/api/orders` route).
 - The audit log is append-only.
+- API rate limits are counted in `rate_limits` through `rate_limit_hit()`, which
+  only the service role can call, so limits hold across all serverless
+  instances. If the function is unavailable the API falls back to a
+  per-instance in-memory limit rather than allowing unlimited requests.
+- Customer studio artwork is stored as **private** Vercel Blobs and served only
+  to its owner and staff through `/api/studio/artwork`. The Blob store must
+  support private blobs (`STUDIO_BLOB_ACCESS=public` is a temporary opt-out).
 
 ## Bootstrapping the first owner
 
