@@ -13,19 +13,39 @@ export function studioBlobAccess(): BlobAccess {
 }
 
 /**
- * Reads a studio artwork blob. Files uploaded before the private default was
- * introduced are public blobs, so fall back to the other access mode when the
- * configured one does not find the file.
+ * Whether artwork uploaded as public before the private default may still be
+ * served. On by default so existing orders keep working; set
+ * STUDIO_ARTWORK_PUBLIC_FALLBACK=off once `pnpm audit:artwork --migrate`
+ * reports no public artwork left, which retires the legacy path entirely.
+ */
+export function legacyPublicFallbackEnabled(): boolean {
+  const value = process.env.STUDIO_ARTWORK_PUBLIC_FALLBACK?.trim().toLowerCase()
+  return !(value === 'off' || value === 'false' || value === '0')
+}
+
+/**
+ * Reads a studio artwork blob in the configured access mode. Falling back to
+ * private storage is always allowed (it is never weaker); falling back to
+ * public storage only while the legacy fallback is enabled.
  */
 export async function getStudioArtwork(pathname: string, fetchBlob: typeof get = get) {
   const primary = studioBlobAccess()
-  const fallback: BlobAccess = primary === 'private' ? 'public' : 'private'
-  for (const access of [primary, fallback]) {
+  const modes: BlobAccess[] = [primary]
+  if (primary === 'public') modes.push('private')
+  else if (legacyPublicFallbackEnabled()) modes.push('public')
+
+  for (const access of modes) {
     try {
       const blob = await fetchBlob(pathname, { access })
-      if (blob && blob.statusCode === 200) return blob
+      if (blob && blob.statusCode === 200) {
+        if (access === 'public' && primary === 'private') {
+          // Counts how often the legacy path is still needed; no customer data logged
+          console.warn('[oneposters] Served legacy public studio artwork; run pnpm audit:artwork')
+        }
+        return blob
+      }
     } catch {
-      // try the other access mode
+      // try the next access mode
     }
   }
   return null
