@@ -42,3 +42,6 @@ __v0_jsx-dev-runtime.ts
 .snowflake/
 .design-cache/
 .v0-trash/
+
+# Output of scripts/audit-studio-artwork.ts
+artwork-audit-*.json
